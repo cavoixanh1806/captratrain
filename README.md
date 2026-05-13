@@ -1,7 +1,7 @@
 # 🤖 CAPTCHA Solver — TrOCR + U-Net Pipeline
 
 Hệ thống AI Local giải CAPTCHA 2 tầng:
-- **Stage 1 — U-Net Denoiser** (~2M params): Nhìn từng pixel, phân loại "chữ hay nền" → xuất ảnh grayscale sạch
+- **Stage 1 — U-Net Denoiser** (~7.7M params): Nhìn từng pixel, phân loại "chữ hay nền" → xuất ảnh grayscale sạch
 - **Stage 2 — TrOCR** (~334M params): Đọc chuỗi ký tự từ ảnh đã làm sạch
 
 ```
@@ -9,7 +9,7 @@ CAPTCHA (128x128, nhiễu, màu ngẫu nhiên)
        |
   ┌────▼────────┐
   │  U-Net      │  pixel nào là chữ? → soft probability map
-  │  ~2M params │  text=đen, background=trắng
+  │  ~7.7M params│  text=đen, background=trắng
   └────┬────────┘
        |  ảnh grayscale sạch
   ┌────▼────────┐
