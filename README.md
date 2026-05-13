@@ -10,6 +10,13 @@ Hệ thống AI Local giải CAPTCHA bằng phương pháp Fine-tuning mô hình
 - Đường kẻ nhiễu, chấm nhiễu
 - Mỗi chữ một màu khác nhau
 
+## Branches
+
+| Branch | Dành cho | Batch size | GPU |
+|---|---|---|---|
+| `master` | CPU (Xeon E3, i5 cũ...) | 4 | Không cần |
+| `gpu` | GPU NVIDIA (RTX 3060+) | 32 | Bắt buộc |
+
 ## Yêu cầu hệ thống
 
 - Python 3.10+
@@ -22,6 +29,14 @@ Hệ thống AI Local giải CAPTCHA bằng phương pháp Fine-tuning mô hình
 # Clone repo
 git clone https://github.com/cavoixanh1806/captratrain.git
 cd captratrain
+
+# ── Chọn branch phù hợp với máy ──────────────────────────
+# Máy CPU (mặc định, không cần làm gì thêm):
+#   master branch — batch_size=4, không cần GPU
+
+# Máy GPU (i5-12400F + RTX 3060 hoặc tương đương):
+git checkout gpu
+# ─────────────────────────────────────────────────────────
 
 # Tạo môi trường ảo
 python -m venv venv
