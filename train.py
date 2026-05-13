@@ -4,15 +4,18 @@ train.py
 Module huấn luyện (fine-tune) mô hình TrOCR trên dataset CAPTCHA.
 
 Sử dụng Seq2SeqTrainer của Hugging Face để fine-tune
-VisionEncoderDecoderModel từ checkpoint microsoft/trocr-small-printed.
+VisionEncoderDecoderModel từ checkpoint microsoft/trocr-base-printed.
 
-Metric đánh giá: CER (Character Error Rate) — tỷ lệ lỗi ký tự.
-CER = (S + D + I) / N
-  S = số ký tự bị thay thế sai
-  D = số ký tự bị xóa
-  I = số ký tự bị chèn thêm
-  N = tổng số ký tự trong ground truth
-CER càng thấp → model càng chính xác (CER = 0 là hoàn hảo).
+Metric đánh giá:
+  - CER (Character Error Rate): tỷ lệ lỗi ký tự — càng thấp càng tốt.
+  - Exact Match Accuracy: % ảnh đoán đúng hoàn toàn — metric thực tế nhất
+    vì CAPTCHA chỉ cần 1 ký tự sai là fail.
+
+FIX:
+  - Bỏ no_repeat_ngram_size=3 (cấm ký tự lặp như "AA123" → sai kết quả).
+  - Giảm length_penalty từ 2.0 xuống 1.0 (CAPTCHA ngắn cố định 5 ký tự).
+  - Tăng EarlyStopping patience từ 3 lên 8 (tránh underfitting với 500 ảnh).
+  - Thêm Exact Match Accuracy vào compute_metrics.
 
 Cách chạy:
     # Dùng Synthetic Data:
@@ -58,47 +61,54 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ─── Hằng số cấu hình ────────────────────────────────────────────────────────
-MODEL_CHECKPOINT: str = "microsoft/trocr-base-printed"  # Base chính xác hơn small
+MODEL_CHECKPOINT: str = "microsoft/trocr-base-printed"
 OUTPUT_DIR: str = "./captcha_trocr_model"
 REAL_DATA_DIR: str = "data"
 
-# Hyperparameters — Tối ưu cho RTX 3060 12GB VRAM, giới hạn 10GB
-# i5-12400F (6c/12t) + 16GB RAM (dùng tối đa 10GB)
-BATCH_SIZE: int = 32         # RTX 3060 xử lý batch lớn hiệu quả
-LEARNING_RATE: float = 2e-5  # Giảm xuống để học ổn định hơn, giảm overfit
-NUM_EPOCHS: int = 30         # GPU nhanh hơn, có thể train nhiều epochs
-SAVE_STEPS: int = 50
-EVAL_STEPS: int = 50
-MAX_TARGET_LENGTH: int = 8   # CAPTCHA cố định 5 ký tự + special tokens
+# Hyperparameters — Tối ưu cho 500 ảnh real data
+# RTX 3060 8GB VRAM, i5-12400F (6c/12t) + 16GB RAM
+# 500 * 0.8 = 400 train, batch=16 → 25 steps/epoch, 50 epochs → 1250 total steps
+BATCH_SIZE: int = 16
+LEARNING_RATE: float = 5e-5
+NUM_EPOCHS: int = 50
+SAVE_STEPS: int = 25         # Save mỗi ~1 epoch
+EVAL_STEPS: int = 25         # Eval mỗi ~1 epoch
+MAX_TARGET_LENGTH: int = 8   # [BOS] + 5 ASCII chars + [EOS] = 7 tokens, 8 dư sức
+
+# FIX: Tăng patience từ 3 lên 8 — tránh dừng quá sớm với 500 ảnh
+# patience=3 → dừng sau 75 steps (~3 epochs) nếu CER không cải thiện
+# patience=8 → dừng sau 200 steps (~8 epochs) — hợp lý hơn
+EARLY_STOPPING_PATIENCE: int = 8
 
 
 def compute_cer_metric(
     processor: TrOCRProcessor,
     cer_metric: Any,
 ) -> Any:
-    """Tạo hàm compute_metrics để tính CER trong quá trình evaluation.
+    """Tạo hàm compute_metrics để tính CER và Exact Match Accuracy.
 
-    Hàm này được truyền vào Seq2SeqTrainer. Sau mỗi epoch validation,
-    Trainer sẽ gọi hàm này với EvalPrediction chứa predictions và labels.
+    FIX: Thêm exact_match — metric thực tế nhất cho CAPTCHA.
+    CAPTCHA chỉ cần 1 ký tự sai là fail hoàn toàn, nên CER một mình
+    không phản ánh đúng hiệu quả thực tế.
 
     Args:
         processor: TrOCRProcessor để decode token IDs thành text.
         cer_metric: Metric CER từ thư viện `evaluate`.
 
     Returns:
-        Hàm compute_metrics(eval_pred) → dict{"cer": float}.
+        Hàm compute_metrics(eval_pred) → dict{"cer": float, "exact_match": float}.
     """
 
     def compute_metrics(eval_pred: Any) -> dict[str, float]:
-        """Tính CER từ predictions và labels.
+        """Tính CER và Exact Match từ predictions và labels.
 
         Args:
             eval_pred: EvalPrediction object với:
-                - predictions: numpy array token IDs dự đoán, shape (N, seq_len).
-                - label_ids: numpy array token IDs ground truth, shape (N, seq_len).
+                - predictions: numpy array token IDs dự đoán.
+                - label_ids: numpy array token IDs ground truth.
 
         Returns:
-            Dict {"cer": float} — giá trị CER trung bình trên tập val.
+            Dict {"cer": float, "exact_match": float}.
         """
         pred_ids, label_ids = eval_pred
 
@@ -117,10 +127,23 @@ def compute_cer_metric(
         pred_str = processor.batch_decode(pred_ids, skip_special_tokens=True)
         label_str = processor.batch_decode(label_ids, skip_special_tokens=True)
 
-        # Tính CER: so sánh từng cặp (prediction, ground_truth)
+        # Normalize: strip + uppercase (CAPTCHA luôn uppercase)
+        pred_str = [p.strip().upper() for p in pred_str]
+        label_str = [l.strip().upper() for l in label_str]
+
+        # CER: tỷ lệ lỗi ký tự
         cer_score = cer_metric.compute(predictions=pred_str, references=label_str)
 
-        return {"cer": cer_score}
+        # Exact Match: % ảnh đoán đúng hoàn toàn
+        # Đây là metric quan trọng nhất cho CAPTCHA — 1 ký tự sai = fail
+        exact_match = sum(
+            p == r for p, r in zip(pred_str, label_str)
+        ) / max(len(pred_str), 1)
+
+        return {
+            "cer": cer_score,
+            "exact_match": exact_match,
+        }
 
     return compute_metrics
 
@@ -128,11 +151,12 @@ def compute_cer_metric(
 def setup_model(processor: TrOCRProcessor) -> VisionEncoderDecoderModel:
     """Load và cấu hình VisionEncoderDecoderModel từ checkpoint TrOCR.
 
-    Các tham số decoder cần được cấu hình thủ công để model hoạt động đúng:
-      - decoder_start_token_id: Token bắt đầu sinh chuỗi (BOS token).
-      - eos_token_id: Token kết thúc chuỗi (EOS token).
-      - pad_token_id: Token padding (dùng để fill chuỗi ngắn hơn max_length).
-      - vocab_size: Kích thước từ điển của decoder.
+    FIX:
+      - Bỏ no_repeat_ngram_size: CAPTCHA có thể có ký tự lặp ("AA123", "11KKK")
+        → no_repeat_ngram_size=3 sẽ cấm model sinh 3 token giống nhau liên tiếp
+        → kết quả sai với CAPTCHA có ký tự lặp.
+      - Giảm length_penalty từ 2.0 xuống 1.0: CAPTCHA luôn đúng 5 ký tự,
+        không cần penalty để ưu tiên chuỗi dài hơn.
 
     Args:
         processor: TrOCRProcessor đã được load.
@@ -144,25 +168,22 @@ def setup_model(processor: TrOCRProcessor) -> VisionEncoderDecoderModel:
     model = VisionEncoderDecoderModel.from_pretrained(MODEL_CHECKPOINT)
 
     # ── Cấu hình các token đặc biệt cho decoder ──────────────────────────────
-    # Đây là bước BẮT BUỘC khi fine-tune VisionEncoderDecoderModel.
-    # Nếu bỏ qua, model sẽ không biết khi nào bắt đầu/kết thúc sinh chuỗi.
     tokenizer = processor.tokenizer
 
     model.config.decoder_start_token_id = tokenizer.cls_token_id
     model.config.eos_token_id = tokenizer.sep_token_id
     model.config.pad_token_id = tokenizer.pad_token_id
-
-    # vocab_size phải khớp với tokenizer để embedding layer hoạt động đúng
     model.config.vocab_size = model.config.decoder.vocab_size
 
-    # ── Cấu hình generation thông qua GenerationConfig (cách đúng ở TF 5.x) ──
-    # Trước đây đặt trực tiếp vào model.config đã bị deprecated.
+    # ── Cấu hình generation ───────────────────────────────────────────────────
+    # FIX: Bỏ no_repeat_ngram_size — CAPTCHA có thể có ký tự lặp
+    # FIX: length_penalty=1.0 thay vì 2.0 — CAPTCHA ngắn cố định 5 ký tự
     model.generation_config = GenerationConfig(
         max_length=MAX_TARGET_LENGTH,
         early_stopping=True,
-        no_repeat_ngram_size=3,
-        length_penalty=2.0,
+        length_penalty=1.0,          # FIX: 1.0 thay vì 2.0
         num_beams=4,
+        # no_repeat_ngram_size bị bỏ — CAPTCHA có thể có ký tự lặp
         decoder_start_token_id=tokenizer.cls_token_id,
         eos_token_id=tokenizer.sep_token_id,
         pad_token_id=tokenizer.pad_token_id,
@@ -190,52 +211,57 @@ def get_training_args(output_dir: str) -> Seq2SeqTrainingArguments:
 
         # ── Learning rate và schedule ─────────────────────────────────────────
         learning_rate=LEARNING_RATE,
-        warmup_steps=200,           # Warm up 200 steps đầu để ổn định training
+        warmup_steps=100,           # ~4 epochs = ~8% total steps (1250)
         weight_decay=0.01,          # L2 regularization
 
         # ── Epochs và evaluation ──────────────────────────────────────────────
         num_train_epochs=NUM_EPOCHS,
-        eval_strategy="steps",      # Evaluate sau mỗi eval_steps (TF 5.x)
+        eval_strategy="steps",
         eval_steps=EVAL_STEPS,
 
         # ── Lưu checkpoint ────────────────────────────────────────────────────
         save_steps=SAVE_STEPS,
-        save_total_limit=3,         # Chỉ giữ 3 checkpoint gần nhất
-        load_best_model_at_end=True,  # Load model tốt nhất khi kết thúc
-        metric_for_best_model="cer",  # Chọn model dựa trên CER thấp nhất
-        greater_is_better=False,    # CER thấp hơn = tốt hơn
+        save_total_limit=3,
+        load_best_model_at_end=True,
+        metric_for_best_model="exact_match",  # FIX: dùng exact_match thay vì cer
+        greater_is_better=True,               # FIX: exact_match cao hơn = tốt hơn
 
         # ── Logging ───────────────────────────────────────────────────────────
-        logging_steps=100,
-        report_to="none",           # Tắt wandb/tensorboard
+        logging_steps=25,
+        report_to="none",
 
         # ── Seq2Seq specific ──────────────────────────────────────────────────
-        predict_with_generate=True,  # Dùng generate() khi evaluate (không dùng logits)
+        predict_with_generate=True,
         generation_max_length=MAX_TARGET_LENGTH,
 
         # ── Tối ưu bộ nhớ ─────────────────────────────────────────────────────
-        fp16=torch.cuda.is_available(),  # Mixed precision FP16 trên RTX 3060
-        dataloader_num_workers=4,   # i5-12400F có 6c/12t, dùng 4 workers
-        dataloader_pin_memory=torch.cuda.is_available(),  # Pin memory khi có GPU
-        label_names=["labels"],     # Khai báo tên labels cho Trainer TF 5.x
+        fp16=torch.cuda.is_available(),
+        dataloader_num_workers=4,
+        dataloader_pin_memory=torch.cuda.is_available(),
+        label_names=["labels"],
     )
 
 
-def main(use_real_data: bool = False, combine: bool = False) -> None:
+def main(
+    use_real_data: bool = False,
+    combine: bool = False,
+    preprocess_method: str | None = None,
+    augment: bool = False,
+) -> None:
     """Hàm chính: load data, setup model và bắt đầu fine-tuning.
 
     Args:
         use_real_data: True để dùng Real Data từ thư mục data/.
         combine: True để kết hợp cả Synthetic và Real Data.
+        preprocess_method: Phương pháp preprocessing.
+        augment: True để bật data augmentation cho training.
     """
     # ── Kiểm tra GPU ──────────────────────────────────────────────────────────
-    # Tối ưu CPU: dùng hết threads của i5-12400F (6c/12t)
     torch.set_num_threads(12)
     torch.set_num_interop_threads(6)
 
     if torch.cuda.is_available():
         device_name = torch.cuda.get_device_name(0)
-        # Giới hạn VRAM tối đa 10GB để chừa RAM cho các tác vụ khác
         total_vram = torch.cuda.get_device_properties(0).total_memory
         max_vram = int(10 * 1024 ** 3)  # 10GB
         if total_vram > max_vram:
@@ -245,8 +271,7 @@ def main(use_real_data: bool = False, combine: bool = False) -> None:
             logger.info(f"🚀 Sử dụng GPU: {device_name}")
     else:
         logger.warning(
-            "⚠️  Không tìm thấy GPU (CUDA). Sẽ chạy trên CPU — rất chậm! "
-            "Khuyến nghị dùng máy có GPU để huấn luyện."
+            "⚠️  Không tìm thấy GPU (CUDA). Sẽ chạy trên CPU — rất chậm!"
         )
 
     # ── Load Processor ────────────────────────────────────────────────────────
@@ -255,10 +280,9 @@ def main(use_real_data: bool = False, combine: bool = False) -> None:
 
     # ── Load Dataset ──────────────────────────────────────────────────────────
     if combine:
-        # Kết hợp Synthetic + Real Data
         from torch.utils.data import ConcatDataset
 
-        logger.info("Chế độ: Kết hợp Synthetic + Real Data")
+        logger.info("Mode: Synthetic + Real Data")
         syn_train, syn_val = create_datasets(
             processor,
             use_real_data=False,
@@ -269,18 +293,26 @@ def main(use_real_data: bool = False, combine: bool = False) -> None:
             use_real_data=True,
             real_data_dir=REAL_DATA_DIR,
             max_target_length=MAX_TARGET_LENGTH,
+            preprocess_method=preprocess_method,
+            augment=augment,
         )
         train_dataset = ConcatDataset([syn_train, real_train])
         val_dataset = ConcatDataset([syn_val, real_val])
 
     else:
         mode = "Real Data" if use_real_data else "Synthetic Data"
-        logger.info(f"Chế độ: {mode}")
+        if preprocess_method:
+            mode += f" + Preprocessing({preprocess_method})"
+        if augment:
+            mode += " + Augmentation"
+        logger.info(f"Mode: {mode}")
         train_dataset, val_dataset = create_datasets(
             processor,
             use_real_data=use_real_data,
             real_data_dir=REAL_DATA_DIR,
             max_target_length=MAX_TARGET_LENGTH,
+            preprocess_method=preprocess_method,
+            augment=augment,
         )
 
     logger.info(f"Train samples: {len(train_dataset)}")
@@ -290,7 +322,6 @@ def main(use_real_data: bool = False, combine: bool = False) -> None:
     model = setup_model(processor)
 
     # ── Load CER Metric ───────────────────────────────────────────────────────
-    # `evaluate` là thư viện của Hugging Face để tính các metric chuẩn
     logger.info("Đang load metric CER...")
     cer_metric = evaluate.load("cer")
     compute_metrics = compute_cer_metric(processor, cer_metric)
@@ -299,8 +330,6 @@ def main(use_real_data: bool = False, combine: bool = False) -> None:
     training_args = get_training_args(OUTPUT_DIR)
 
     # ── Khởi tạo Seq2SeqTrainer ───────────────────────────────────────────────
-    # default_data_collator: gộp các sample thành batch tensor
-    # Với Seq2Seq, nó tự động xử lý padding cho labels
     trainer = Seq2SeqTrainer(
         model=model,
         args=training_args,
@@ -308,9 +337,11 @@ def main(use_real_data: bool = False, combine: bool = False) -> None:
         eval_dataset=val_dataset,
         data_collator=default_data_collator,
         compute_metrics=compute_metrics,
-        processing_class=processor,  # Thay thế cho tokenizer (deprecated) trong TF 5.x
-        # EarlyStopping: dừng sớm nếu CER không cải thiện trong 3 lần eval liên tiếp
-        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+        processing_class=processor,
+        # FIX: Tăng patience từ 3 lên 8 — tránh dừng quá sớm với 500 ảnh
+        callbacks=[EarlyStoppingCallback(
+            early_stopping_patience=EARLY_STOPPING_PATIENCE,
+        )],
     )
 
     # ── Bắt đầu Fine-tuning ───────────────────────────────────────────────────
@@ -318,29 +349,46 @@ def main(use_real_data: bool = False, combine: bool = False) -> None:
     trainer.train()
 
     # ── Lưu Model và Processor ────────────────────────────────────────────────
-    logger.info(f"💾 Lưu model tốt nhất vào: {OUTPUT_DIR}")
+    logger.info(f"[SAVE] Best model saved to: {OUTPUT_DIR}")
     trainer.save_model(OUTPUT_DIR)
     processor.save_pretrained(OUTPUT_DIR)
 
-    logger.info("🎉 Huấn luyện hoàn tất!")
-    logger.info(f"   Model đã lưu tại: {OUTPUT_DIR}")
-    logger.info(f"   Chạy inference: python inference.py <đường_dẫn_ảnh>")
+    logger.info("[DONE] Training complete!")
+    logger.info(f"   Model saved at: {OUTPUT_DIR}")
+    logger.info(f"   Run inference: python inference.py <image_path>")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Fine-tune TrOCR trên dataset CAPTCHA"
+        description="Fine-tune TrOCR on CAPTCHA dataset"
     )
     parser.add_argument(
         "--use-real-data",
         action="store_true",
-        help="Dùng Real Data từ thư mục data/ (cần có metadata.csv)",
+        help="Use Real Data from data/ directory (requires metadata.csv)",
     )
     parser.add_argument(
         "--combine",
         action="store_true",
-        help="Kết hợp cả Synthetic Data và Real Data",
+        help="Combine Synthetic + Real Data",
+    )
+    parser.add_argument(
+        "--preprocess",
+        type=str,
+        default=None,
+        choices=["enhanced", "adaptive", "color", "combined", "unet"],
+        help="Preprocessing method: unet (best), color, enhanced, adaptive, combined",
+    )
+    parser.add_argument(
+        "--augment",
+        action="store_true",
+        help="Enable data augmentation (rotation, brightness, blur, elastic)",
     )
     args = parser.parse_args()
 
-    main(use_real_data=args.use_real_data, combine=args.combine)
+    main(
+        use_real_data=args.use_real_data,
+        combine=args.combine,
+        preprocess_method=args.preprocess,
+        augment=args.augment,
+    )

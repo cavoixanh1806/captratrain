@@ -6,6 +6,11 @@ và chuẩn bị đưa vào mô hình TrOCR (VisionEncoderDecoderModel).
 
 Class này hỗ trợ cả Synthetic Data (data/synthetic/) lẫn Real Data (data/)
 thông qua cùng một interface — chỉ khác nhau ở đường dẫn đầu vào.
+
+FIX:
+- Augmentation mạnh hơn: thêm ElasticTransform, GridDistortion, GaussNoise
+  để tăng hiệu quả từ 500 ảnh thực (albumentations).
+- Fallback về torchvision nếu albumentations chưa cài.
 """
 
 import os
@@ -14,9 +19,87 @@ from typing import Optional
 
 import pandas as pd
 from PIL import Image
+import cv2
+import numpy as np
 import torch
 from torch.utils.data import Dataset
+from torchvision import transforms
 from transformers import TrOCRProcessor
+
+from preprocessing import preprocess_captcha
+
+# Kiểm tra albumentations — dùng nếu có, fallback torchvision nếu không
+try:
+    import albumentations as A
+    from albumentations.pytorch import ToTensorV2
+    _HAS_ALBUMENTATIONS = True
+except ImportError:
+    _HAS_ALBUMENTATIONS = False
+
+
+def _build_augment_transform(use_strong: bool = True):
+    """Tạo augmentation pipeline.
+
+    Nếu albumentations có sẵn: dùng augmentation mạnh với ElasticTransform,
+    GridDistortion, GaussNoise — giống nhiễu CAPTCHA thực tế hơn.
+    Nếu không: fallback về torchvision cơ bản.
+
+    Args:
+        use_strong: True để dùng albumentations (nếu có).
+
+    Returns:
+        Callable nhận PIL Image, trả về PIL Image đã augment.
+    """
+    if use_strong and _HAS_ALBUMENTATIONS:
+        aug = A.Compose([
+            # Biến dạng hình học — giống distortion của CAPTCHA thực
+            A.ElasticTransform(alpha=30, sigma=5, p=0.5),
+            A.GridDistortion(num_steps=5, distort_limit=0.2, p=0.3),
+            A.Rotate(limit=8, border_mode=cv2.BORDER_REFLECT_101, p=0.5),
+            # Nhiễu và màu sắc
+            A.GaussNoise(var_limit=(5.0, 25.0), p=0.4),
+            A.RandomBrightnessContrast(
+                brightness_limit=0.3,
+                contrast_limit=0.3,
+                p=0.5,
+            ),
+            A.HueSaturationValue(
+                hue_shift_limit=10,
+                sat_shift_limit=20,
+                val_shift_limit=15,
+                p=0.3,
+            ),
+            # Blur nhẹ — giống CAPTCHA bị nén/resize
+            A.OneOf([
+                A.GaussianBlur(blur_limit=(3, 5), p=1.0),
+                A.MotionBlur(blur_limit=3, p=1.0),
+            ], p=0.3),
+        ])
+
+        def _apply_albu(pil_img: Image.Image) -> Image.Image:
+            arr = np.array(pil_img)
+            result = aug(image=arr)["image"]
+            return Image.fromarray(result)
+
+        return _apply_albu
+
+    else:
+        # Fallback: torchvision cơ bản
+        tv_aug = transforms.Compose([
+            transforms.RandomRotation(8),
+            transforms.ColorJitter(
+                brightness=0.3,
+                contrast=0.3,
+                saturation=0.2,
+                hue=0.05,
+            ),
+            transforms.GaussianBlur(3, sigma=(0.1, 1.5)),
+        ])
+
+        def _apply_tv(pil_img: Image.Image) -> Image.Image:
+            return tv_aug(pil_img)
+
+        return _apply_tv
 
 
 class CaptchaDataset(Dataset):
@@ -32,6 +115,8 @@ class CaptchaDataset(Dataset):
         metadata_path: Đường dẫn file metadata.csv (cột: filename, text).
         processor: Instance của TrOCRProcessor đã được load.
         max_target_length: Độ dài tối đa của chuỗi nhãn sau khi tokenize.
+        preprocess_method: Phương pháp preprocessing (None, "unet", "color", ...).
+        augment: True để bật data augmentation mạnh cho tập train.
     """
 
     def __init__(
@@ -40,10 +125,20 @@ class CaptchaDataset(Dataset):
         metadata_path: str | Path,
         processor: TrOCRProcessor,
         max_target_length: int = 16,
+        preprocess_method: str | None = None,
+        augment: bool = False,
     ) -> None:
         self.image_dir = Path(image_dir)
         self.processor = processor
         self.max_target_length = max_target_length
+        self.preprocess_method = preprocess_method
+        self.augment = augment
+
+        # Augmentation pipeline — mạnh hơn nếu albumentations có sẵn
+        if augment:
+            self.augment_fn = _build_augment_transform(use_strong=True)
+        else:
+            self.augment_fn = None
 
         # Đọc metadata.csv — mỗi dòng là một cặp (filename, text)
         self.df = pd.read_csv(metadata_path, dtype=str)
@@ -69,9 +164,11 @@ class CaptchaDataset(Dataset):
 
         Pipeline:
             1. Đọc ảnh từ disk, chuyển sang RGB.
-            2. Dùng processor để encode ảnh → pixel_values.
-            3. Dùng processor để tokenize text → labels (token IDs).
-            4. Thay padding token ID bằng -100 để loss function bỏ qua.
+            2. Preprocessing (tách chữ khỏi nền nhiễu).
+            3. Augmentation ngẫu nhiên (chỉ khi training).
+            4. Dùng processor để encode ảnh → pixel_values.
+            5. Dùng processor để tokenize text → labels (token IDs).
+            6. Thay padding token ID bằng -100 để loss function bỏ qua.
 
         Args:
             idx: Chỉ số của mẫu cần lấy.
@@ -96,22 +193,24 @@ class CaptchaDataset(Dataset):
                 f"Kiểm tra lại metadata.csv và thư mục ảnh."
             )
 
-        # TrOCR yêu cầu ảnh RGB (3 kênh màu)
-        image = Image.open(image_path).convert("RGB")
+        # ── Bước 2: Preprocessing ─────────────────────────────────────────────
+        if self.preprocess_method:
+            img_cv = cv2.imread(str(image_path))
+            image = preprocess_captcha(img_cv, method=self.preprocess_method)
+        else:
+            image = Image.open(image_path).convert("RGB")
 
-        # ── Bước 2: Encode ảnh bằng TrOCRProcessor ───────────────────────────
-        # processor xử lý ảnh qua ViTFeatureExtractor:
-        #   - Resize về 384x384 (hoặc kích thước chuẩn của model)
-        #   - Normalize với mean/std của ImageNet
+        # ── Bước 3: Augmentation ──────────────────────────────────────────────
+        if self.augment_fn is not None:
+            image = self.augment_fn(image)
+
+        # ── Bước 4: Encode ảnh bằng TrOCRProcessor ───────────────────────────
         pixel_values = self.processor(
             images=image,
             return_tensors="pt",
-        ).pixel_values.squeeze(0)  # Bỏ batch dim: (1, 3, H, W) → (3, H, W)
+        ).pixel_values.squeeze(0)  # (1, 3, H, W) → (3, H, W)
 
-        # ── Bước 3: Tokenize text (labels) ───────────────────────────────────
-        # processor.tokenizer chuyển chuỗi ký tự thành token IDs
-        # padding="max_length" đảm bảo tất cả labels có cùng độ dài
-        # truncation=True cắt bớt nếu text quá dài
+        # ── Bước 5: Tokenize text (labels) ───────────────────────────────────
         labels = self.processor.tokenizer(
             text,
             padding="max_length",
@@ -120,9 +219,8 @@ class CaptchaDataset(Dataset):
             return_tensors="pt",
         ).input_ids.squeeze(0)  # (1, seq_len) → (seq_len,)
 
-        # ── Bước 4: Thay padding token bằng -100 ─────────────────────────────
-        # CrossEntropyLoss sẽ bỏ qua các vị trí có label = -100,
-        # tránh tính loss trên padding tokens (không có ý nghĩa ngữ nghĩa)
+        # ── Bước 6: Thay padding token bằng -100 ─────────────────────────────
+        # CrossEntropyLoss bỏ qua các vị trí có label = -100
         pad_token_id = self.processor.tokenizer.pad_token_id
         labels[labels == pad_token_id] = -100
 
@@ -140,6 +238,8 @@ def create_datasets(
     synthetic_val_dir: str | Path = "data/synthetic/val",
     max_target_length: int = 16,
     val_split_ratio: float = 0.2,
+    preprocess_method: str | None = None,
+    augment: bool = False,
 ) -> tuple[CaptchaDataset, CaptchaDataset]:
     """Factory function tạo cặp (train_dataset, val_dataset).
 
@@ -156,6 +256,8 @@ def create_datasets(
         synthetic_val_dir: Thư mục synthetic val.
         max_target_length: Độ dài tối đa của labels.
         val_split_ratio: Tỷ lệ chia val khi dùng real data (mặc định 0.2).
+        preprocess_method: Phương pháp preprocessing.
+        augment: True để bật data augmentation cho tập train.
 
     Returns:
         Tuple (train_dataset, val_dataset).
@@ -184,8 +286,18 @@ def create_datasets(
         df_train.to_csv(train_meta, index=False)
         df_val.to_csv(val_meta, index=False)
 
-        train_dataset = CaptchaDataset(real_data_dir, train_meta, processor, max_target_length)
-        val_dataset = CaptchaDataset(real_data_dir, val_meta, processor, max_target_length)
+        # Train: preprocessing + augmentation ON
+        # Val: preprocessing ON, augmentation OFF (đánh giá trên ảnh gốc)
+        train_dataset = CaptchaDataset(
+            real_data_dir, train_meta, processor, max_target_length,
+            preprocess_method=preprocess_method,
+            augment=augment,
+        )
+        val_dataset = CaptchaDataset(
+            real_data_dir, val_meta, processor, max_target_length,
+            preprocess_method=preprocess_method,
+            augment=False,  # Không augment validation
+        )
 
     else:
         # Dùng Synthetic Data

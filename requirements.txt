@@ -44,5 +44,10 @@ jiwer==3.0.4
 sentencepiece==0.2.0
 protobuf==7.34.1
 
+# ── Augmentation mạnh (tùy chọn nhưng khuyến nghị) ──────────
+# Nếu có: dùng ElasticTransform, GridDistortion, GaussNoise cho training
+# Nếu không có: tự fallback về torchvision augmentation cơ bản
+albumentations==1.4.3
+
 # ── Tiện ích ─────────────────────────────────────────────────
 tqdm==4.66.2

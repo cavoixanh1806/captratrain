@@ -11,6 +11,10 @@ Cách dùng (trong code):
     solver = CaptchaSolver()
     text = solver.solve_captcha("path/to/captcha.png")
     print(text)  # "AB3K7"
+
+FIX:
+  - solve_batch: thêm preprocessing nhất quán với solve_captcha.
+  - Warning log khi output không đúng 5 ký tự.
 """
 
 import sys
@@ -18,8 +22,12 @@ import logging
 from pathlib import Path
 
 import torch
+import cv2
+import numpy as np
 from PIL import Image
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+
+from preprocessing import preprocess_captcha
 
 # ─── Cấu hình logging ────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -41,13 +49,20 @@ class CaptchaSolver:
     Args:
         model_dir: Đường dẫn thư mục chứa model và processor đã lưu.
                    Mặc định là './captcha_trocr_model'.
+        preprocess_method: Phương pháp preprocessing ảnh trước khi đưa vào model.
+                           None = không preprocessing, "unet" = tốt nhất.
 
     Raises:
         OSError: Nếu thư mục model không tồn tại hoặc thiếu file cần thiết.
     """
 
-    def __init__(self, model_dir: str = DEFAULT_MODEL_DIR) -> None:
+    def __init__(
+        self,
+        model_dir: str = DEFAULT_MODEL_DIR,
+        preprocess_method: str | None = "color",
+    ) -> None:
         self.model_dir = Path(model_dir)
+        self.preprocess_method = preprocess_method
         self._validate_model_dir()
 
         # Xác định device: ưu tiên GPU nếu có
@@ -77,7 +92,6 @@ class CaptchaSolver:
                 f"    python train.py --use-real-data"
             )
 
-        # Kiểm tra file config của model (dấu hiệu model đã được lưu đúng)
         config_file = self.model_dir / "config.json"
         if not config_file.exists():
             raise OSError(
@@ -86,12 +100,30 @@ class CaptchaSolver:
                 f"    python train.py --use-real-data"
             )
 
+    def _load_and_preprocess(self, image_path: Path) -> Image.Image:
+        """Đọc ảnh từ disk và áp dụng preprocessing.
+
+        Helper dùng chung cho solve_captcha và solve_batch để đảm bảo
+        preprocessing nhất quán giữa single và batch inference.
+
+        Args:
+            image_path: Đường dẫn file ảnh (đã được validate tồn tại).
+
+        Returns:
+            PIL RGB Image đã qua preprocessing.
+        """
+        if self.preprocess_method:
+            img_cv = cv2.imread(str(image_path))
+            return preprocess_captcha(img_cv, method=self.preprocess_method)
+        else:
+            return Image.open(image_path).convert("RGB")
+
     def solve_captcha(self, image_path: str | Path) -> str:
         """Dự đoán text từ ảnh CAPTCHA.
 
         Pipeline inference:
             1. Kiểm tra file ảnh tồn tại.
-            2. Mở ảnh và chuyển sang RGB.
+            2. Mở ảnh + preprocessing (tách chữ khỏi nền nhiễu).
             3. Dùng processor encode ảnh → pixel_values tensor.
             4. Chạy model.generate() với beam search để sinh chuỗi token.
             5. Decode token IDs → chuỗi text.
@@ -113,8 +145,8 @@ class CaptchaSolver:
                 f"Không tìm thấy file ảnh: '{image_path}'."
             )
 
-        # ── Bước 2: Mở ảnh ────────────────────────────────────────────────────
-        image = Image.open(image_path).convert("RGB")
+        # ── Bước 2: Mở ảnh + Preprocessing ───────────────────────────────────
+        image = self._load_and_preprocess(image_path)
 
         # ── Bước 3: Encode ảnh ────────────────────────────────────────────────
         pixel_values = self.processor(
@@ -123,25 +155,30 @@ class CaptchaSolver:
         ).pixel_values.to(self.device)
 
         # ── Bước 4: Inference với torch.no_grad() ─────────────────────────────
-        # torch.no_grad() tắt gradient computation — tiết kiệm bộ nhớ và
-        # tăng tốc độ inference (không cần backprop khi predict)
         with torch.no_grad():
             generated_ids = self.model.generate(
                 pixel_values,
-                max_length=8,       # 5 ký tự CAPTCHA + special tokens
+                max_length=8,       # [BOS] + 5 ASCII chars + [EOS] = 7, 8 dư sức
                 num_beams=4,        # Beam search với 4 beams
                 early_stopping=True,
             )
 
         # ── Bước 5: Decode token IDs → text ──────────────────────────────────
-        # skip_special_tokens=True: bỏ qua [CLS], [SEP], [PAD] tokens
         predicted_text = self.processor.batch_decode(
             generated_ids,
             skip_special_tokens=True,
-        )[0]  # Lấy kết quả đầu tiên (batch size = 1)
+        )[0]
 
-        # CAPTCHA luôn đúng 5 ký tự — cắt hoặc pad nếu model sinh sai độ dài
-        result = predicted_text.strip().upper()[:5]
+        # CAPTCHA 5 ký tự — cắt nếu model sinh dài hơn
+        raw = predicted_text.strip().upper()
+        result = raw[:5]
+
+        # Log warning nếu model sinh sai độ dài
+        if len(raw) != 5:
+            logger.warning(
+                f"Model output {len(raw)} chars instead of 5: '{raw}'"
+            )
+
         return result
 
     def solve_batch(self, image_paths: list[str | Path]) -> list[str]:
@@ -149,18 +186,25 @@ class CaptchaSolver:
 
         Hiệu quả hơn gọi solve_captcha() nhiều lần vì xử lý song song trên GPU.
 
+        FIX: Áp dụng preprocessing nhất quán với solve_captcha thông qua
+             _load_and_preprocess() — trước đây solve_batch bỏ qua preprocessing.
+
         Args:
             image_paths: Danh sách đường dẫn ảnh CAPTCHA.
 
         Returns:
             Danh sách chuỗi ký tự dự đoán tương ứng.
+
+        Raises:
+            FileNotFoundError: Nếu bất kỳ file ảnh nào không tồn tại.
         """
         images = []
         for path in image_paths:
             path = Path(path)
             if not path.exists():
                 raise FileNotFoundError(f"Không tìm thấy file ảnh: '{path}'.")
-            images.append(Image.open(path).convert("RGB"))
+            # FIX: dùng _load_and_preprocess thay vì Image.open trực tiếp
+            images.append(self._load_and_preprocess(path))
 
         # Encode toàn bộ batch
         pixel_values = self.processor(
@@ -171,7 +215,7 @@ class CaptchaSolver:
         with torch.no_grad():
             generated_ids = self.model.generate(
                 pixel_values,
-                max_length=16,
+                max_length=8,
                 num_beams=4,
                 early_stopping=True,
             )
@@ -180,7 +224,18 @@ class CaptchaSolver:
             generated_ids,
             skip_special_tokens=True,
         )
-        return [r.strip() for r in results]
+
+        # Normalize: strip + uppercase + cắt 5 ký tự
+        processed = []
+        for r in results:
+            raw = r.strip().upper()
+            if len(raw) != 5:
+                logger.warning(
+                    f"Batch: model output {len(raw)} chars instead of 5: '{raw}'"
+                )
+            processed.append(raw[:5])
+
+        return processed
 
 
 def solve_captcha(image_path: str, model_dir: str = DEFAULT_MODEL_DIR) -> str:
