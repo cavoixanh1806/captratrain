@@ -6,7 +6,7 @@ Hệ thống AI Local giải CAPTCHA bằng phương pháp Fine-tuning mô hình
 
 | Branch | Dành cho | GPU | Batch size | Tốc độ train |
 |---|---|---|---|---|
-| `master` | GPU — i5-12400F + RTX 3060+ | ✅ Bắt buộc | 32 | ~10-15 phút |
+| `master` | GPU — i5-12400F + RTX 3060+ | ✅ Bắt buộc | 32 | ~1-2 giờ |
 | `nogpu` | CPU — Xeon E3, i5 cũ... | ❌ Không cần | 4 | ~3-4 giờ |
 
 ## Đặc điểm CAPTCHA hỗ trợ
@@ -22,7 +22,7 @@ Hệ thống AI Local giải CAPTCHA bằng phương pháp Fine-tuning mô hình
 ### Branch `master` (GPU)
 - Python 3.10+
 - RAM: 16GB (dùng tối đa 10GB)
-- GPU: NVIDIA RTX 3060+ với CUDA 11.8+
+- GPU: NVIDIA RTX 3060+ với CUDA 12.8+
 - VRAM: tối thiểu 8GB
 
 ### Branch `nogpu` (CPU)
