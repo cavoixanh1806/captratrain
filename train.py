@@ -67,8 +67,8 @@ REAL_DATA_DIR: str = "data"
 BATCH_SIZE: int = 32         # RTX 3060 xử lý batch lớn hiệu quả
 LEARNING_RATE: float = 2e-5  # Giảm xuống để học ổn định hơn, giảm overfit
 NUM_EPOCHS: int = 30         # GPU nhanh hơn, có thể train nhiều epochs
-SAVE_STEPS: int = 200
-EVAL_STEPS: int = 200
+SAVE_STEPS: int = 50
+EVAL_STEPS: int = 50
 MAX_TARGET_LENGTH: int = 8   # CAPTCHA cố định 5 ký tự + special tokens
 
 
