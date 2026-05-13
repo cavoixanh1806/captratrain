@@ -62,10 +62,11 @@ MODEL_CHECKPOINT: str = "microsoft/trocr-base-printed"  # Base chính xác hơn 
 OUTPUT_DIR: str = "./captcha_trocr_model"
 REAL_DATA_DIR: str = "data"
 
-# Hyperparameters
-BATCH_SIZE: int = 16         # Tăng lên 16 — Xeon E3 + 12GB RAM dư sức
+# Hyperparameters — Tối ưu cho RTX 3060 12GB VRAM, giới hạn 10GB
+# i5-12400F (6c/12t) + 16GB RAM (dùng tối đa 10GB)
+BATCH_SIZE: int = 32         # RTX 3060 xử lý batch lớn hiệu quả
 LEARNING_RATE: float = 2e-5  # Giảm xuống để học ổn định hơn, giảm overfit
-NUM_EPOCHS: int = 30         # Tăng epochs — có thêm data + LR thấp hơn
+NUM_EPOCHS: int = 30         # GPU nhanh hơn, có thể train nhiều epochs
 SAVE_STEPS: int = 200
 EVAL_STEPS: int = 200
 MAX_TARGET_LENGTH: int = 8   # CAPTCHA cố định 5 ký tự + special tokens
@@ -213,9 +214,9 @@ def get_training_args(output_dir: str) -> Seq2SeqTrainingArguments:
         generation_max_length=MAX_TARGET_LENGTH,
 
         # ── Tối ưu bộ nhớ ─────────────────────────────────────────────────────
-        fp16=torch.cuda.is_available(),  # Mixed precision nếu có GPU
-        dataloader_num_workers=4,   # Dùng 4 workers cho Xeon 4c/8t
-        dataloader_pin_memory=False,
+        fp16=torch.cuda.is_available(),  # Mixed precision FP16 trên RTX 3060
+        dataloader_num_workers=4,   # i5-12400F có 6c/12t, dùng 4 workers
+        dataloader_pin_memory=torch.cuda.is_available(),  # Pin memory khi có GPU
         label_names=["labels"],     # Khai báo tên labels cho Trainer TF 5.x
     )
 
@@ -228,13 +229,20 @@ def main(use_real_data: bool = False, combine: bool = False) -> None:
         combine: True để kết hợp cả Synthetic và Real Data.
     """
     # ── Kiểm tra GPU ──────────────────────────────────────────────────────────
-    # Tối ưu CPU: dùng hết threads của Xeon E3 (4c/8t)
-    torch.set_num_threads(8)
-    torch.set_num_interop_threads(4)
+    # Tối ưu CPU: dùng hết threads của i5-12400F (6c/12t)
+    torch.set_num_threads(12)
+    torch.set_num_interop_threads(6)
 
     if torch.cuda.is_available():
         device_name = torch.cuda.get_device_name(0)
-        logger.info(f"🚀 Sử dụng GPU: {device_name}")
+        # Giới hạn VRAM tối đa 10GB để chừa RAM cho các tác vụ khác
+        total_vram = torch.cuda.get_device_properties(0).total_memory
+        max_vram = int(10 * 1024 ** 3)  # 10GB
+        if total_vram > max_vram:
+            torch.cuda.set_per_process_memory_fraction(max_vram / total_vram)
+            logger.info(f"🚀 Sử dụng GPU: {device_name} (giới hạn 10GB VRAM)")
+        else:
+            logger.info(f"🚀 Sử dụng GPU: {device_name}")
     else:
         logger.warning(
             "⚠️  Không tìm thấy GPU (CUDA). Sẽ chạy trên CPU — rất chậm! "
