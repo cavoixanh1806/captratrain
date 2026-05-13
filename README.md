@@ -31,8 +31,18 @@ Hệ thống AI Local giải CAPTCHA bằng phương pháp Fine-tuning mô hình
 
 ## Cài đặt
 
+### Cài Git (nếu chưa có)
+
 ```bash
-# Clone repo
+# Windows — tải và cài từ:
+# https://git-scm.com/download/win
+# Hoặc dùng winget:
+winget install Git.Git
+```
+
+### Clone repo
+
+```bash
 git clone https://github.com/cavoixanh1806/captratrain.git
 cd captratrain
 ```
@@ -161,6 +171,43 @@ python generate_data.py
 - Càng nhiều data gán nhãn → model càng chính xác
 - Tối thiểu 200-300 ảnh để model bắt đầu học được
 - Mục tiêu 400-500 ảnh để đạt CER < 0.1
+
+## Giải thích output khi train
+
+Khi train, bạn sẽ thấy output dạng:
+
+```
+{'loss': 3.29, 'grad_norm': 47.29, 'learning_rate': 5e-05, 'epoch': 4.44}
+{'eval_loss': 3.47, 'eval_cer': 0.92, 'eval_runtime': 66.9, 'epoch': 4.44}
+```
+
+### Ý nghĩa các giá trị
+
+| Giá trị | Ý nghĩa dễ hiểu | Tốt khi nào? |
+|---|---|---|
+| `loss` | Model sai bao nhiêu khi train. Như điểm "sai" | Càng nhỏ càng tốt (giảm dần) |
+| `eval_loss` | Model sai bao nhiêu trên ảnh chưa thấy bao giờ | Càng nhỏ càng tốt |
+| `eval_cer` | **Quan trọng nhất.** Tỷ lệ ký tự sai. VD: 0.64 = sai 64% ký tự | Mục tiêu < 0.1 (sai dưới 10%) |
+| `learning_rate` | Tốc độ học — giảm dần theo thời gian | Tự động, không cần quan tâm |
+| `grad_norm` | Độ lớn gradient — model đang thay đổi mạnh hay nhẹ | Tự động |
+| `epoch` | Đã lặp qua toàn bộ data bao nhiêu lần | Chỉ để theo dõi tiến trình |
+
+### Ví dụ thực tế với CER
+
+- CER = 1.0 → sai hết (đoán "XXXXX" thay vì "4KTN9")
+- CER = 0.64 → sai 3/5 ký tự (đoán "4KAAA" thay vì "4KTN9")
+- CER = 0.2 → sai 1/5 ký tự (đoán "4KTN7" thay vì "4KTN9")
+- CER = 0 → đúng hoàn toàn
+
+### Tham số ảnh hưởng độ chính xác
+
+| Tham số | Ảnh hưởng? | Giải thích |
+|---|---|---|
+| `NUM_EPOCHS` | ✅ Có | Model được học nhiều lần hơn → chính xác hơn (đến 1 mức nào đó) |
+| `EVAL_STEPS` | ❌ Không | Chỉ là tần suất kiểm tra, không thay đổi cách model học |
+| `BATCH_SIZE` | ⚠️ Ít | Ảnh hưởng tốc độ, ít ảnh hưởng kết quả cuối |
+| `LEARNING_RATE` | ✅ Có | Quá cao → học sai, quá thấp → học chậm |
+| **Số lượng data** | ✅✅✅ Quan trọng nhất | Nhiều data = chính xác hơn |
 
 ## License
 
