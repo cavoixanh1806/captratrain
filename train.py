@@ -374,10 +374,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--preprocess",
-        type=str,
-        default=None,
-        choices=["enhanced", "adaptive", "color", "combined", "unet"],
-        help="Preprocessing method: unet (best), color, enhanced, adaptive, combined",
+        action="store_true",
+        default=True,
+        help="Use U-Net preprocessing (always enabled)",
     )
     parser.add_argument(
         "--augment",
@@ -389,6 +388,6 @@ if __name__ == "__main__":
     main(
         use_real_data=args.use_real_data,
         combine=args.combine,
-        preprocess_method=args.preprocess,
+        preprocess_method="unet",
         augment=args.augment,
     )

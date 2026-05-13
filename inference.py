@@ -59,10 +59,9 @@ class CaptchaSolver:
     def __init__(
         self,
         model_dir: str = DEFAULT_MODEL_DIR,
-        preprocess_method: str | None = "color",
     ) -> None:
         self.model_dir = Path(model_dir)
-        self.preprocess_method = preprocess_method
+        self.preprocess_method = "unet"  # Luôn dùng U-Net
         self._validate_model_dir()
 
         # Xác định device: ưu tiên GPU nếu có
@@ -101,22 +100,9 @@ class CaptchaSolver:
             )
 
     def _load_and_preprocess(self, image_path: Path) -> Image.Image:
-        """Đọc ảnh từ disk và áp dụng preprocessing.
-
-        Helper dùng chung cho solve_captcha và solve_batch để đảm bảo
-        preprocessing nhất quán giữa single và batch inference.
-
-        Args:
-            image_path: Đường dẫn file ảnh (đã được validate tồn tại).
-
-        Returns:
-            PIL RGB Image đã qua preprocessing.
-        """
-        if self.preprocess_method:
-            img_cv = cv2.imread(str(image_path))
-            return preprocess_captcha(img_cv, method=self.preprocess_method)
-        else:
-            return Image.open(image_path).convert("RGB")
+        """Đọc ảnh và preprocess bằng U-Net."""
+        img_cv = cv2.imread(str(image_path))
+        return preprocess_captcha(img_cv)
 
     def solve_captcha(self, image_path: str | Path) -> str:
         """Dự đoán text từ ảnh CAPTCHA.
@@ -240,9 +226,6 @@ class CaptchaSolver:
 
 def solve_captcha(image_path: str, model_dir: str = DEFAULT_MODEL_DIR) -> str:
     """Hàm tiện ích — giải CAPTCHA từ đường dẫn ảnh (stateless).
-
-    Tạo CaptchaSolver mới mỗi lần gọi. Dùng khi chỉ cần giải 1 ảnh.
-    Nếu cần giải nhiều ảnh, hãy dùng class CaptchaSolver trực tiếp.
 
     Args:
         image_path: Đường dẫn đến file ảnh CAPTCHA.

@@ -193,10 +193,10 @@ class CaptchaDataset(Dataset):
                 f"Kiểm tra lại metadata.csv và thư mục ảnh."
             )
 
-        # ── Bước 2: Preprocessing ─────────────────────────────────────────────
+        # ── Bước 2: Preprocessing bằng U-Net ─────────────────────────────────
         if self.preprocess_method:
             img_cv = cv2.imread(str(image_path))
-            image = preprocess_captcha(img_cv, method=self.preprocess_method)
+            image = preprocess_captcha(img_cv)
         else:
             image = Image.open(image_path).convert("RGB")
 
