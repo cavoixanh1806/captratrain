@@ -67,6 +67,14 @@ captratrain/
 
 ## Sử dụng
 
+> **Lưu ý:** Luôn kích hoạt môi trường ảo trước khi chạy bất kỳ lệnh nào:
+> ```bash
+> # Windows
+> venv\Scripts\activate
+> # Linux/Mac
+> source venv/bin/activate
+> ```
+
 ### 1. Gán nhãn data
 
 Ảnh CAPTCHA nằm trong `data/`. Cần tạo file `data/metadata.csv` với format:
@@ -78,9 +86,11 @@ map_00001.png,7UTUP
 ...
 ```
 
-Dùng web tool để gán nhãn nhanh:
+Dùng web tool để gán nhãn nhanh (cần kích hoạt venv trước):
 
 ```bash
+# Windows
+venv\Scripts\activate
 python label_server.py
 # Mở http://localhost:8080
 ```
@@ -88,6 +98,9 @@ python label_server.py
 ### 2. Huấn luyện model
 
 ```bash
+# Windows — kích hoạt venv trước
+venv\Scripts\activate
+
 # Train với data thực (sau khi đã gán nhãn)
 python train.py --use-real-data
 ```
@@ -97,13 +110,16 @@ Model sẽ được lưu vào `./captcha_trocr_model/`
 ### 3. Dự đoán CAPTCHA
 
 ```bash
+# Windows — kích hoạt venv trước
+venv\Scripts\activate
+
 # Từ command line
 python inference.py data/map_00050.png
 # Output: Kết quả: AB3K7
 ```
 
 ```python
-# Trong code Python
+# Trong code Python (venv phải đang active)
 from inference import CaptchaSolver
 
 solver = CaptchaSolver()
@@ -114,6 +130,7 @@ print(result)  # "AB3K7"
 ### 4. (Tùy chọn) Tạo data giả để bổ sung
 
 ```bash
+venv\Scripts\activate
 python generate_data.py
 ```
 
