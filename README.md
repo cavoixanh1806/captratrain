@@ -209,6 +209,18 @@ Khi train, bạn sẽ thấy output dạng:
 | `LEARNING_RATE` | ✅ Có | Quá cao → học sai, quá thấp → học chậm |
 | **Số lượng data** | ✅✅✅ Quan trọng nhất | Nhiều data = chính xác hơn |
 
+## Cập nhật code mới
+
+Khi có code mới trên GitHub, chạy:
+
+```bash
+# GPU (branch master)
+git pull origin master
+
+# CPU (branch nogpu)
+git pull origin nogpu
+```
+
 ## License
 
 MIT
