@@ -128,7 +128,7 @@ class CaptchaSolver:
         with torch.no_grad():
             generated_ids = self.model.generate(
                 pixel_values,
-                max_length=16,      # Độ dài tối đa của chuỗi sinh ra
+                max_length=8,       # 5 ký tự CAPTCHA + special tokens
                 num_beams=4,        # Beam search với 4 beams
                 early_stopping=True,
             )

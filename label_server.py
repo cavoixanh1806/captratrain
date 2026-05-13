@@ -112,7 +112,31 @@ HTML_PAGE = """<!DOCTYPE html>
             font-size: 13px;
             color: #888;
             margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
+        .goto-input {
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 4px 8px;
+            width: 70px;
+            border-radius: 4px;
+            outline: none;
+            font-size: 13px;
+        }
+        .btn-go {
+            background: #00d4ff;
+            color: #1a1a2e;
+            padding: 4px 10px;
+            font-size: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: none;
+            font-weight: bold;
+        }
+        .btn-go:hover { background: #00ff88; }
         input[type="text"] {
             font-size: 24px;
             padding: 10px 20px;
@@ -216,12 +240,18 @@ HTML_PAGE = """<!DOCTYPE html>
     </div>
 
     <div class="main-container">
-        <div class="filename-label" id="filename-label">map_00000.png</div>
+        <div class="filename-label">
+            <span id="filename-label">map_00000.png</span>
+            <div style="margin-left: 20px; display: flex; gap: 5px; align-items: center;">
+                Nhảy tới: <input type="number" id="goto-input" class="goto-input" min="1" placeholder="STT...">
+                <button class="btn-go" onclick="gotoImage()">Đi</button>
+            </div>
+        </div>
         <div class="image-container">
             <img id="captcha-img" src="" alt="CAPTCHA">
         </div>
         <div class="input-group">
-            <input type="text" id="label-input" placeholder="Nhập nhãn..." autofocus autocomplete="off" oninput="this.value = this.value.toUpperCase()">
+            <input type="text" id="label-input" placeholder="Nhập nhãn..." maxlength="5" autofocus autocomplete="off" oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '')">
             <button class="btn-save" onclick="saveLabel()">Lưu</button>
         </div>
         <div class="nav-buttons">
@@ -305,7 +335,8 @@ HTML_PAGE = """<!DOCTYPE html>
             const idx = filteredIndices[currentFilterIdx];
             const input = document.getElementById('label-input');
             const text = input.value.trim().toUpperCase();
-            if (!text) {
+            if (text.length !== 5) {
+                alert('Nhãn phải nhập đúng 5 ký tự (A-Z, 0-9)!');
                 input.focus();
                 return;
             }
@@ -346,6 +377,18 @@ HTML_PAGE = """<!DOCTYPE html>
             if (currentFilterIdx > 0) {
                 currentFilterIdx--;
                 showCurrent();
+            }
+        }
+
+        function gotoImage() {
+            const input = document.getElementById('goto-input');
+            const val = parseInt(input.value);
+            if (!isNaN(val) && val >= 1 && val <= filteredIndices.length) {
+                currentFilterIdx = val - 1;
+                showCurrent();
+                input.value = ''; // Clear sau khi nhảy
+            } else {
+                alert('Số thứ tự không hợp lệ (Phải từ 1 đến ' + filteredIndices.length + ')');
             }
         }
 

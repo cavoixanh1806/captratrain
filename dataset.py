@@ -56,8 +56,9 @@ class CaptchaDataset(Dataset):
                 f"Hiện tại chỉ có: {set(self.df.columns)}"
             )
 
-        # Loại bỏ các dòng có giá trị null
+        # Loại bỏ các dòng có giá trị null hoặc text rỗng
         self.df = self.df.dropna(subset=["filename", "text"]).reset_index(drop=True)
+        self.df = self.df[self.df["text"].str.strip().astype(bool)].reset_index(drop=True)
 
     def __len__(self) -> int:
         """Trả về tổng số mẫu trong dataset."""

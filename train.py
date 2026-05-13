@@ -33,12 +33,18 @@ from typing import Any
 
 import numpy as np
 import torch
+
+# Tắt HTTP request logs của huggingface_hub (quá nhiều noise)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 from transformers import (
     TrOCRProcessor,
     VisionEncoderDecoderModel,
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
     default_data_collator,
+    GenerationConfig,
+    EarlyStoppingCallback,
 )
 import evaluate
 
@@ -52,17 +58,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ─── Hằng số cấu hình ────────────────────────────────────────────────────────
-MODEL_CHECKPOINT: str = "microsoft/trocr-small-printed"
+MODEL_CHECKPOINT: str = "microsoft/trocr-base-printed"  # Base chính xác hơn small
 OUTPUT_DIR: str = "./captcha_trocr_model"
 REAL_DATA_DIR: str = "data"
 
 # Hyperparameters
-BATCH_SIZE: int = 8          # Giảm xuống 4 nếu GPU bị OOM
-LEARNING_RATE: float = 5e-5  # Learning rate khuyến nghị cho fine-tuning
-NUM_EPOCHS: int = 10
-SAVE_STEPS: int = 500
-EVAL_STEPS: int = 500
-MAX_TARGET_LENGTH: int = 16  # Độ dài tối đa của CAPTCHA (4-6 ký tự + padding)
+BATCH_SIZE: int = 16         # Tăng lên 16 — Xeon E3 + 12GB RAM dư sức
+LEARNING_RATE: float = 2e-5  # Giảm xuống để học ổn định hơn, giảm overfit
+NUM_EPOCHS: int = 30         # Tăng epochs — có thêm data + LR thấp hơn
+SAVE_STEPS: int = 200
+EVAL_STEPS: int = 200
+MAX_TARGET_LENGTH: int = 8   # CAPTCHA cố định 5 ký tự + special tokens
 
 
 def compute_cer_metric(
@@ -148,12 +154,18 @@ def setup_model(processor: TrOCRProcessor) -> VisionEncoderDecoderModel:
     # vocab_size phải khớp với tokenizer để embedding layer hoạt động đúng
     model.config.vocab_size = model.config.decoder.vocab_size
 
-    # Cấu hình beam search cho generation (dùng khi inference)
-    model.config.max_length = MAX_TARGET_LENGTH
-    model.config.early_stopping = True
-    model.config.no_repeat_ngram_size = 3
-    model.config.length_penalty = 2.0
-    model.config.num_beams = 4
+    # ── Cấu hình generation thông qua GenerationConfig (cách đúng ở TF 5.x) ──
+    # Trước đây đặt trực tiếp vào model.config đã bị deprecated.
+    model.generation_config = GenerationConfig(
+        max_length=MAX_TARGET_LENGTH,
+        early_stopping=True,
+        no_repeat_ngram_size=3,
+        length_penalty=2.0,
+        num_beams=4,
+        decoder_start_token_id=tokenizer.cls_token_id,
+        eos_token_id=tokenizer.sep_token_id,
+        pad_token_id=tokenizer.pad_token_id,
+    )
 
     logger.info("✅ Model đã được cấu hình thành công.")
     return model
@@ -182,7 +194,7 @@ def get_training_args(output_dir: str) -> Seq2SeqTrainingArguments:
 
         # ── Epochs và evaluation ──────────────────────────────────────────────
         num_train_epochs=NUM_EPOCHS,
-        eval_strategy="steps",      # Evaluate sau mỗi eval_steps
+        eval_strategy="steps",      # Evaluate sau mỗi eval_steps (TF 5.x)
         eval_steps=EVAL_STEPS,
 
         # ── Lưu checkpoint ────────────────────────────────────────────────────
@@ -193,9 +205,8 @@ def get_training_args(output_dir: str) -> Seq2SeqTrainingArguments:
         greater_is_better=False,    # CER thấp hơn = tốt hơn
 
         # ── Logging ───────────────────────────────────────────────────────────
-        logging_dir=f"{output_dir}/logs",
         logging_steps=100,
-        report_to="none",           # Tắt wandb/tensorboard nếu không cần
+        report_to="none",           # Tắt wandb/tensorboard
 
         # ── Seq2Seq specific ──────────────────────────────────────────────────
         predict_with_generate=True,  # Dùng generate() khi evaluate (không dùng logits)
@@ -203,8 +214,9 @@ def get_training_args(output_dir: str) -> Seq2SeqTrainingArguments:
 
         # ── Tối ưu bộ nhớ ─────────────────────────────────────────────────────
         fp16=torch.cuda.is_available(),  # Mixed precision nếu có GPU
-        dataloader_num_workers=0,   # Windows không hỗ trợ multiprocessing tốt
-        dataloader_pin_memory=torch.cuda.is_available(),
+        dataloader_num_workers=4,   # Dùng 4 workers cho Xeon 4c/8t
+        dataloader_pin_memory=False,
+        label_names=["labels"],     # Khai báo tên labels cho Trainer TF 5.x
     )
 
 
@@ -216,6 +228,10 @@ def main(use_real_data: bool = False, combine: bool = False) -> None:
         combine: True để kết hợp cả Synthetic và Real Data.
     """
     # ── Kiểm tra GPU ──────────────────────────────────────────────────────────
+    # Tối ưu CPU: dùng hết threads của Xeon E3 (4c/8t)
+    torch.set_num_threads(8)
+    torch.set_num_interop_threads(4)
+
     if torch.cuda.is_available():
         device_name = torch.cuda.get_device_name(0)
         logger.info(f"🚀 Sử dụng GPU: {device_name}")
@@ -284,7 +300,9 @@ def main(use_real_data: bool = False, combine: bool = False) -> None:
         eval_dataset=val_dataset,
         data_collator=default_data_collator,
         compute_metrics=compute_metrics,
-        tokenizer=processor.feature_extractor,  # Dùng để lưu processor config
+        processing_class=processor,  # Thay thế cho tokenizer (deprecated) trong TF 5.x
+        # EarlyStopping: dừng sớm nếu CER không cải thiện trong 3 lần eval liên tiếp
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
     )
 
     # ── Bắt đầu Fine-tuning ───────────────────────────────────────────────────

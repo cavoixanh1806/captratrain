@@ -5,14 +5,17 @@
 # ============================================================
 
 # ── Deep Learning ────────────────────────────────────────────
-torch==2.2.2
-torchvision==0.17.2
+torch>=2.12.0
+torchvision>=0.27.0
 
 # ── Hugging Face Ecosystem ───────────────────────────────────
-transformers==4.40.2
+transformers==5.8.1
 datasets==2.19.1
 evaluate==0.4.2
-accelerate==0.29.3
+accelerate==1.13.0
+huggingface_hub==1.14.0
+hf_xet==1.5.0
+tokenizers==0.22.2
 
 # ── Xử lý ảnh ───────────────────────────────────────────────
 opencv-python==4.9.0.80
@@ -29,6 +32,9 @@ scikit-learn==1.4.2
 # ── Metric CER (dependency của evaluate) ────────────────────
 jiwer==3.0.4
 
+# ── Tokenizer & protobuf ─────────────────────────────────────
+sentencepiece==0.2.0
+protobuf==7.34.1
+
 # ── Tiện ích ─────────────────────────────────────────────────
 tqdm==4.66.2
-sentencepiece==0.2.0

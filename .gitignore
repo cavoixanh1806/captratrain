@@ -1,37 +1,39 @@
-# Python
+# ── Môi trường ảo ─────────────────────────────────────────
+venv/
+
+# ── Model đã train (rất nặng ~500MB-1GB) ─────────────────
+captcha_trocr_model/
+captcha_trocr_model/**
+
+# ── Checkpoints trong quá trình train ─────────────────────
+checkpoint-*/
+
+# ── Data synthetic (tự tạo lại được) ──────────────────────
+data/synthetic/
+
+# ── File tạm của dataset.py ───────────────────────────────
+data/_train_meta.csv
+data/_val_meta.csv
+
+# ── Python cache ──────────────────────────────────────────
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+*.pyo
 *.egg-info/
-.installed.cfg
-*.egg
+dist/
+build/
 
-# Virtual Environment
-venv/
-ENV/
-
-# IDE
+# ── IDE ───────────────────────────────────────────────────
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# OS
-.DS_Store
+# ── OS ────────────────────────────────────────────────────
 Thumbs.db
+Desktop.ini
+.DS_Store
 
-# Data (Optional: Bỏ comment nếu bạn không muốn backup thư mục data bằng Git)
-data/
+# ── Logs ──────────────────────────────────────────────────
+*.log
+logs/
