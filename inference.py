@@ -140,7 +140,9 @@ class CaptchaSolver:
             skip_special_tokens=True,
         )[0]  # Lấy kết quả đầu tiên (batch size = 1)
 
-        return predicted_text.strip()
+        # CAPTCHA luôn đúng 5 ký tự — cắt hoặc pad nếu model sinh sai độ dài
+        result = predicted_text.strip().upper()[:5]
+        return result
 
     def solve_batch(self, image_paths: list[str | Path]) -> list[str]:
         """Dự đoán text cho nhiều ảnh CAPTCHA cùng lúc (batch inference).

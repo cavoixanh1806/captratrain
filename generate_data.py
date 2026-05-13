@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 # ─── Hằng số cấu hình ────────────────────────────────────────────────────────
 CHARSET: str = string.ascii_uppercase + string.digits  # A-Z + 0-9
-MIN_CHARS: int = 4
-MAX_CHARS: int = 6
+MIN_CHARS: int = 5
+MAX_CHARS: int = 5
 TRAIN_COUNT: int = 10_000
 VAL_COUNT: int = 2_000
 OUTPUT_BASE: Path = Path("data/synthetic")
