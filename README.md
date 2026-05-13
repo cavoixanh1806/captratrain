@@ -2,6 +2,13 @@
 
 Hệ thống AI Local giải CAPTCHA bằng phương pháp Fine-tuning mô hình TrOCR (`microsoft/trocr-base-printed`) của Microsoft.
 
+## Branches
+
+| Branch | Dành cho | GPU | Batch size | Tốc độ train |
+|---|---|---|---|---|
+| `master` | GPU — i5-12400F + RTX 3060+ | ✅ Bắt buộc | 32 | ~10-15 phút |
+| `nogpu` | CPU — Xeon E3, i5 cũ... | ❌ Không cần | 4 | ~3-4 giờ |
+
 ## Đặc điểm CAPTCHA hỗ trợ
 
 - Chữ và số (A-Z, 0-9), 5 ký tự
@@ -10,18 +17,17 @@ Hệ thống AI Local giải CAPTCHA bằng phương pháp Fine-tuning mô hình
 - Đường kẻ nhiễu, chấm nhiễu
 - Mỗi chữ một màu khác nhau
 
-## Branches
-
-| Branch | Dành cho | Batch size | GPU |
-|---|---|---|---|
-| `master` | CPU (Xeon E3, i5 cũ...) | 4 | Không cần |
-| `gpu` | GPU NVIDIA (RTX 3060+) | 32 | Bắt buộc |
-
 ## Yêu cầu hệ thống
 
+### Branch `master` (GPU)
 - Python 3.10+
-- RAM: tối thiểu 8GB (khuyến nghị 12GB+)
-- GPU NVIDIA (tùy chọn, không bắt buộc — có thể train trên CPU)
+- RAM: 16GB (dùng tối đa 10GB)
+- GPU: NVIDIA RTX 3060+ với CUDA 11.8+
+- VRAM: tối thiểu 8GB
+
+### Branch `nogpu` (CPU)
+- Python 3.10+
+- RAM: tối thiểu 8GB
 
 ## Cài đặt
 
@@ -29,40 +35,53 @@ Hệ thống AI Local giải CAPTCHA bằng phương pháp Fine-tuning mô hình
 # Clone repo
 git clone https://github.com/cavoixanh1806/captratrain.git
 cd captratrain
+```
 
-# ── Chọn branch phù hợp với máy ──────────────────────────
-# Máy CPU (mặc định, không cần làm gì thêm):
-#   master branch — batch_size=4, không cần GPU
+### Chọn branch phù hợp
 
-# Máy GPU (i5-12400F + RTX 3060 hoặc tương đương):
-git checkout gpu
-# ─────────────────────────────────────────────────────────
+```bash
+# Nếu có GPU (RTX 3060+):
+git checkout master
 
-# Tạo môi trường ảo
+# Nếu chỉ có CPU:
+git checkout nogpu
+```
+
+### Tạo môi trường ảo
+
+```bash
+# Windows
 python -m venv venv
-
-# Kích hoạt (Windows)
 venv\Scripts\activate
 
-# Kích hoạt (Linux/Mac)
+# Linux/Mac
+python -m venv venv
 source venv/bin/activate
+```
 
-# Cài dependencies
+### Cài PyTorch
+
+**Branch `master` (GPU — CUDA 12.8, tương thích CUDA 13.x):**
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+```
+
+**Branch `nogpu` (CPU):**
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+```
+
+### Cài các thư viện còn lại
+
+```bash
 pip install -r requirements.txt
 ```
 
-## Cấu trúc dự án
+### Kiểm tra CUDA (branch master)
 
-```
-captratrain/
-├── data/                    ← Ảnh CAPTCHA + metadata.csv (nhãn)
-├── generate_data.py         ← Tạo data CAPTCHA giả (synthetic)
-├── dataset.py               ← Tiền xử lý data cho model
-├── train.py                 ← Huấn luyện (fine-tune) model
-├── inference.py             ← Dự đoán CAPTCHA từ ảnh
-├── label_server.py          ← Web tool gán nhãn nhanh
-├── requirements.txt
-└── README.md
+```bash
+python -c "import torch; print('CUDA:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0))"
+# Output mong đợi: CUDA: True | GPU: NVIDIA GeForce RTX 3060
 ```
 
 ## Sử dụng
@@ -83,13 +102,11 @@ captratrain/
 filename,text
 map_00000.png,4KTN9
 map_00001.png,7UTUP
-...
 ```
 
-Dùng web tool để gán nhãn nhanh (cần kích hoạt venv trước):
+Dùng web tool để gán nhãn nhanh:
 
 ```bash
-# Windows
 venv\Scripts\activate
 python label_server.py
 # Mở http://localhost:8080
@@ -98,10 +115,7 @@ python label_server.py
 ### 2. Huấn luyện model
 
 ```bash
-# Windows — kích hoạt venv trước
 venv\Scripts\activate
-
-# Train với data thực (sau khi đã gán nhãn)
 python train.py --use-real-data
 ```
 
@@ -110,16 +124,13 @@ Model sẽ được lưu vào `./captcha_trocr_model/`
 ### 3. Dự đoán CAPTCHA
 
 ```bash
-# Windows — kích hoạt venv trước
 venv\Scripts\activate
-
-# Từ command line
 python inference.py data/map_00050.png
 # Output: Kết quả: AB3K7
 ```
 
 ```python
-# Trong code Python (venv phải đang active)
+# Trong code Python
 from inference import CaptchaSolver
 
 solver = CaptchaSolver()
@@ -127,7 +138,7 @@ result = solver.solve_captcha("path/to/captcha.png")
 print(result)  # "AB3K7"
 ```
 
-### 4. (Tùy chọn) Tạo data giả để bổ sung
+### 4. (Tùy chọn) Tạo data giả
 
 ```bash
 venv\Scripts\activate
@@ -136,20 +147,20 @@ python generate_data.py
 
 ## Tham số huấn luyện
 
-| Tham số | Giá trị | Ghi chú |
+| Tham số | master (GPU) | nogpu (CPU) |
 |---|---|---|
-| Model | trocr-base-printed | Có thể đổi sang small/large |
-| Batch size | 4 | Tăng nếu có nhiều RAM |
-| Learning rate | 2e-5 | |
-| Epochs | 30 | Có early stopping |
-| Max length | 8 | 5 ký tự + special tokens |
+| Model | trocr-base-printed | trocr-base-printed |
+| Batch size | 32 | 4 |
+| Learning rate | 2e-5 | 2e-5 |
+| Epochs | 30 | 30 |
+| Workers | 4 | 0 |
+| FP16 | ✅ | ❌ |
 
 ## Mẹo
 
 - Càng nhiều data gán nhãn → model càng chính xác
 - Tối thiểu 200-300 ảnh để model bắt đầu học được
 - Mục tiêu 400-500 ảnh để đạt CER < 0.1
-- Nếu có GPU NVIDIA, train nhanh hơn 10-20x
 
 ## License
 
