@@ -62,7 +62,7 @@ echo [OK] Buoc 1 hoan tat.
 
 echo.
 echo ============================================================
-echo BUOC 2/5: Generate TrOCR synthetic data (5K labeled samples)
+echo BUOC 2/5: Generate TrOCR synthetic data (2K labeled samples)
 echo ============================================================
 python generate_trocr_synthetic.py >> %LOGFILE% 2>&1
 if errorlevel 1 goto error
