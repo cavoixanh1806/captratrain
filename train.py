@@ -49,7 +49,7 @@ from transformers import (
     GenerationConfig,
     EarlyStoppingCallback,
 )
-import evaluate
+import evaluate as hf_evaluate
 
 from dataset import create_datasets
 
@@ -323,7 +323,7 @@ def main(
 
     # ── Load CER Metric ───────────────────────────────────────────────────────
     logger.info("Đang load metric CER...")
-    cer_metric = evaluate.load("cer")
+    cer_metric = hf_evaluate.load("cer")
     compute_metrics = compute_cer_metric(processor, cer_metric)
 
     # ── Training Arguments ────────────────────────────────────────────────────

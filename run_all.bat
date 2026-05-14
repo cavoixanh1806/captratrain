@@ -38,7 +38,7 @@ echo.
 echo ============================================================
 echo BUOC 5/5: Evaluate model tren 500 anh real
 echo ============================================================
-python evaluate.py
+python eval_model.py
 if errorlevel 1 goto error
 
 echo.

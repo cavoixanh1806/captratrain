@@ -81,7 +81,7 @@ python train_unet.py
 python train.py --use-real-data --augment
 
 # Bước 6: Evaluate
-python evaluate.py
+python eval_model.py
 ```
 
 ## Inference (sau khi train xong)

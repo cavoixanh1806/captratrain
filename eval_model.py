@@ -20,12 +20,7 @@ from pathlib import Path
 from collections import Counter
 
 import pandas as pd
-import sys
-import importlib
-
-# Fix circular import: file nay ten 'evaluate.py' trung voi 'import evaluate'
-# Phai import huggingface evaluate bang ten day du
-_hf_evaluate = importlib.import_module("evaluate")
+import evaluate as hf_evaluate
 
 from inference import CaptchaSolver
 
@@ -85,7 +80,7 @@ def evaluate_model(
     exact_accuracy = exact_correct / len(labels)
 
     # 2. CER
-    cer_metric = _hf_evaluate.load("cer")
+    cer_metric = hf_evaluate.load("cer")
     cer = cer_metric.compute(predictions=predictions, references=labels)
 
     # 3. Per-position accuracy
