@@ -70,13 +70,13 @@ REAL_DATA_DIR: str = "data"
 # 500 * 0.8 = 400 train, batch=16 → 25 steps/epoch, 50 epochs → 1250 total steps
 BATCH_SIZE: int = 16
 LEARNING_RATE: float = 5e-5
-NUM_EPOCHS: int = 100        # Tang tu 50 — model can nhieu epochs voi 400 anh
-SAVE_STEPS: int = 25
-EVAL_STEPS: int = 25
-MAX_TARGET_LENGTH: int = 12  # Tang tu 8 — du cho model sinh 5 chars, tranh truncate
+NUM_EPOCHS: int = 30         # Giam tu 100 — voi 5600 train samples du de converge
+SAVE_STEPS: int = 100        # Save moi ~1 epoch (5600/16=350 steps/epoch, 100=~30%)
+EVAL_STEPS: int = 100
+MAX_TARGET_LENGTH: int = 12
 
-# Tang patience len 20 — model can nhieu thoi gian de hoc voi 400 anh
-EARLY_STOPPING_PATIENCE: int = 20
+# Patience 10 — voi data nhieu, model converge nhanh hon
+EARLY_STOPPING_PATIENCE: int = 10
 
 
 def compute_cer_metric(

@@ -165,11 +165,18 @@ CER:               4.30%
 | Params | 7.7M | 334M |
 | Loss | DiceBCE | CrossEntropy |
 | LR | 1e-3 | 5e-5 |
-| Epochs | 30 | 100 |
-| Patience | — | 20 |
+| Epochs | 30 | 30 |
+| Patience | — | 10 |
 | Batch | 32 | 16 |
 | Beams | — | 8 |
 | FP16 | — | ✅ |
+
+**Data train:**
+- U-Net: 10K synthetic (BG synthetic + text render) + 2K val
+- TrOCR: 2K synthetic + 600 real (754 × 80%) = 2,600 train samples
+
+**Thời gian ước tính trên RTX 3060:** ~6 giờ tổng (U-Net 15 phút + TrOCR ~5h)
+**Trên RTX 5090:** ~1.5 giờ
 
 ## Cấu trúc project
 

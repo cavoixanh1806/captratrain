@@ -29,8 +29,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 OUTPUT_BASE = Path("data/synthetic")
-TRAIN_COUNT = 5_000
-VAL_COUNT = 1_000
+TRAIN_COUNT = 2_000
+VAL_COUNT = 400
 
 
 def generate_split(output_dir: Path, count: int, split_name: str):
