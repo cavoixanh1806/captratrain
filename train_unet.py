@@ -7,7 +7,10 @@ The U-Net learns to predict a per-pixel probability map:
     - 0 = background (noise, lines, gradient)
     - 1 = text character pixel
 
-Training uses Binary Cross-Entropy loss and monitors IoU metric.
+Training uses combined Dice + BCE loss:
+    - BCE: chuẩn binary classification per-pixel
+    - Dice: focus vào overlap, xử lý class imbalance tốt hơn
+      (vì text chỉ chiếm ~15-20% diện tích → BCE một mình bias về background)
 
 Usage:
     python train_unet.py
@@ -23,11 +26,63 @@ import cv2
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from unet_model import CaptchaUNet
+
+
+class DiceBCELoss(nn.Module):
+    """Combined Dice Loss + BCE Loss.
+
+    Dice Loss tập trung vào overlap (IoU-like), không phụ thuộc class balance.
+    BCE Loss đảm bảo độ chính xác pixel-level.
+    Kết hợp cả hai cho kết quả ổn định nhất với imbalanced segmentation.
+
+    Args:
+        dice_weight: Trọng số cho Dice Loss (mặc định 0.5).
+        bce_weight: Trọng số cho BCE Loss (mặc định 0.5).
+        smooth: Hằng số tránh chia 0.
+    """
+
+    def __init__(
+        self,
+        dice_weight: float = 0.5,
+        bce_weight: float = 0.5,
+        smooth: float = 1.0,
+    ) -> None:
+        super().__init__()
+        self.dice_weight = dice_weight
+        self.bce_weight = bce_weight
+        self.smooth = smooth
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Tính loss.
+
+        Args:
+            pred: Predicted probability map (B, 1, H, W), values 0-1.
+            target: Ground truth binary mask (B, 1, H, W), values 0 or 1.
+
+        Returns:
+            Combined loss (scalar).
+        """
+        # BCE Loss — clamp pred để tránh log(0)
+        pred_clamped = torch.clamp(pred, min=1e-7, max=1 - 1e-7)
+        bce = F.binary_cross_entropy(pred_clamped, target)
+
+        # Dice Loss — flatten tensors rồi tính intersection/union
+        pred_flat = pred.view(-1)
+        target_flat = target.view(-1)
+        intersection = (pred_flat * target_flat).sum()
+        dice = 1 - (2.0 * intersection + self.smooth) / (
+            pred_flat.sum() + target_flat.sum() + self.smooth
+        )
+
+        return self.bce_weight * bce + self.dice_weight * dice
+
+
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -276,8 +331,8 @@ def main(
     logger.info(f"Model params: {model.count_parameters():,}")
 
     # ── Training setup ────────────────────────────────────────────────────────
-    # BCELoss because U-Net outputs sigmoid probabilities
-    criterion = nn.BCELoss()
+    # BCELoss + DiceLoss kết hợp — xử lý class imbalance tốt hơn BCE một mình
+    criterion = DiceBCELoss(dice_weight=0.5, bce_weight=0.5)
     optimizer = Adam(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = CosineAnnealingLR(optimizer, T_max=epochs, eta_min=1e-6)
 
