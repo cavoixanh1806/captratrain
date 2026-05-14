@@ -23,7 +23,6 @@ import cv2
 
 from generate_unet_data import (
     render_text_on_image, random_text, CAPTCHA_SIZE,
-    _load_real_backgrounds,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -68,9 +67,7 @@ def main():
     train_dir = OUTPUT_BASE / "train"
     val_dir = OUTPUT_BASE / "val"
 
-    # Pre-load real backgrounds (dung chung cho ca train + val)
-    _load_real_backgrounds()
-
+    # Background dung synthetic (khong can real BG nua)
     generate_split(train_dir, TRAIN_COUNT, "train")
     generate_split(val_dir, VAL_COUNT, "val")
 

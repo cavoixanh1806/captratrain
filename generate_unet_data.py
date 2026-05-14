@@ -38,7 +38,6 @@ CAPTCHA_SIZE: int = 128
 TRAIN_COUNT: int = 10_000
 VAL_COUNT: int = 2_000
 OUTPUT_BASE: Path = Path("data/unet_pairs")
-REAL_BG_DIR: Path = Path("data/real_backgrounds")
 
 # Font: mix bold + regular + serif — real data co NHIEU FONT trong 1 anh
 # Real CAPTCHA dung: Rockwell-like slab serif, sans-serif (Arial/Verdana),
@@ -116,65 +115,80 @@ def random_text(length: int = 5) -> str:
     return "".join(random.choices(CHARSET, k=length))
 
 
-# ── Real backgrounds cache ────────────────────────────────────────────────────
-_real_bg_cache: list[np.ndarray] | None = None
-
-
-def _load_real_backgrounds() -> list[np.ndarray]:
-    """Load tat ca real backgrounds vao memory (1 lan duy nhat).
-
-    Returns:
-        List of BGR arrays (128, 128, 3).
-    """
-    global _real_bg_cache
-    if _real_bg_cache is not None:
-        return _real_bg_cache
-
-    if not REAL_BG_DIR.exists():
-        raise FileNotFoundError(
-            f"Khong tim thay {REAL_BG_DIR}. Hay chay 'python extract_real_backgrounds.py' truoc."
-        )
-
-    bg_files = sorted(REAL_BG_DIR.glob("bg_*.png"))
-    if not bg_files:
-        raise FileNotFoundError(
-            f"Thu muc {REAL_BG_DIR} rong. Hay chay 'python extract_real_backgrounds.py' truoc."
-        )
-
-    bgs = []
-    for f in bg_files:
-        img = cv2.imread(str(f))
-        if img is not None and img.shape[:2] == (CAPTCHA_SIZE, CAPTCHA_SIZE):
-            bgs.append(img)
-
-    logger.info(f"Loaded {len(bgs)} real backgrounds vao cache")
-    _real_bg_cache = bgs
-    return bgs
-
-
 def get_random_real_background(size: int = 128) -> np.ndarray:
-    """Lay 1 real background ngau nhien tu cache.
+    """Lay background — uu tien synthetic (chinh xac hon inpainting).
 
-    Apply augmentation nhe: flip, brightness shift de tang diversity.
+    Sinh warm gray background giong real data:
+    - RGB avg (171, 164, 157), saturation thap
+    - 67% flat, 30% mild gradient, 4% patches
 
     Args:
-        size: kich thuoc (lay 128).
+        size: kich thuoc (128).
 
     Returns:
         BGR numpy array (size, size, 3).
     """
-    bgs = _load_real_backgrounds()
-    bg = bgs[random.randint(0, len(bgs) - 1)].copy()
+    # Base warm gray — R, G, B gan nhau de saturation thap
+    base_intensity = random.randint(140, 200)
+    base_r = base_intensity + random.randint(-5, 8)
+    base_g = base_intensity + random.randint(-5, 5)
+    base_b = base_intensity + random.randint(-8, 3)
+    base = np.array([base_b, base_g, base_r], dtype=np.float32)  # BGR
 
-    # Augment: flip horizontal 50% (tang diversity)
+    img = np.full((size, size, 3), base, dtype=np.float32)
+
+    texture_roll = random.random()
+
+    if texture_roll < 0.67:
+        # Flat
+        noise = np.random.normal(0, 2, img.shape).astype(np.float32)
+        img += noise
+    elif texture_roll < 0.97:
+        # Mild gradient
+        gradient_strength = random.uniform(5, 15)
+        direction = random.choice(["h", "v", "d"])
+        for i in range(size):
+            ratio = i / size
+            shift = (ratio - 0.5) * gradient_strength
+            if direction == "h":
+                img[:, i] += shift
+            elif direction == "v":
+                img[i, :] += shift
+            else:
+                img[i, :] += shift * (1 - ratio * 0.5)
+        noise = np.random.normal(0, 3, img.shape).astype(np.float32)
+        img += noise
+    else:
+        # Patches
+        num_patches = random.randint(2, 5)
+        for _ in range(num_patches):
+            patch_size = random.randint(15, 40)
+            cx = random.randint(0, size - 1)
+            cy = random.randint(0, size - 1)
+            patch_color = base + np.array([
+                random.randint(-15, 15),
+                random.randint(-15, 15),
+                random.randint(-15, 15),
+            ], dtype=np.float32)
+            y1, y2 = max(0, cy - patch_size), min(size, cy + patch_size)
+            x1, x2 = max(0, cx - patch_size), min(size, cx + patch_size)
+            if y2 > y1 and x2 > x1:
+                yy, xx = np.ogrid[y1:y2, x1:x2]
+                dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+                alpha = np.clip(1 - dist / patch_size, 0, 1) * 0.25
+                for c in range(3):
+                    img[y1:y2, x1:x2, c] = (
+                        img[y1:y2, x1:x2, c] * (1 - alpha)
+                        + patch_color[c] * alpha
+                    )
+        noise = np.random.normal(0, 4, img.shape).astype(np.float32)
+        img += noise
+
+    # Augment nhe
     if random.random() < 0.5:
-        bg = cv2.flip(bg, 1)
+        img = np.flip(img, axis=1).copy()
 
-    # Brightness shift nhe ±15
-    brightness_shift = random.randint(-15, 15)
-    bg = np.clip(bg.astype(np.int16) + brightness_shift, 0, 255).astype(np.uint8)
-
-    return bg
+    return np.clip(img, 0, 255).astype(np.uint8)
 
 
 def random_text_color_hsv() -> tuple[int, int, int]:

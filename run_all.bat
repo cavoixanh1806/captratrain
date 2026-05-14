@@ -41,7 +41,6 @@ echo [CLEAN] Xoa model cu...
 echo [CLEAN] Xoa model cu... >> %LOGFILE%
 if exist captcha_unet_model.pth del /q captcha_unet_model.pth
 if exist captcha_trocr_model rmdir /s /q captcha_trocr_model
-if exist data\real_backgrounds rmdir /s /q data\real_backgrounds
 if exist data\unet_pairs rmdir /s /q data\unet_pairs
 if exist data\synthetic rmdir /s /q data\synthetic
 echo [CLEAN] Done.
@@ -63,23 +62,15 @@ if exist dataset (
 
 echo.
 echo ============================================================
-echo BUOC 1/6: Extract real backgrounds tu %IMG_COUNT% anh
+echo BUOC 1/6: Generate U-Net training data
 echo ============================================================
-python extract_real_backgrounds.py >> %LOGFILE% 2>&1
+python generate_unet_data.py >> %LOGFILE% 2>&1
 if errorlevel 1 goto error
 echo [OK] Buoc 1 hoan tat.
 
 echo.
 echo ============================================================
-echo BUOC 2/6: Generate U-Net training data
-echo ============================================================
-python generate_unet_data.py >> %LOGFILE% 2>&1
-if errorlevel 1 goto error
-echo [OK] Buoc 2 hoan tat.
-
-echo.
-echo ============================================================
-echo BUOC 3/6: Generate TrOCR synthetic data (co label)
+echo BUOC 2/6: Generate TrOCR synthetic data (co label)
 echo ============================================================
 python generate_trocr_synthetic.py >> %LOGFILE% 2>&1
 if errorlevel 1 goto error
@@ -87,7 +78,7 @@ echo [OK] Buoc 3 hoan tat.
 
 echo.
 echo ============================================================
-echo BUOC 4/6: Train U-Net Denoiser
+echo BUOC 3/6: Train U-Net Denoiser
 echo ============================================================
 python train_unet.py >> %LOGFILE% 2>&1
 if errorlevel 1 goto error
@@ -95,7 +86,7 @@ echo [OK] Buoc 4 hoan tat. Model: captcha_unet_model.pth
 
 echo.
 echo ============================================================
-echo BUOC 5/6: Train TrOCR (Combine synthetic + %IMG_COUNT% real)
+echo BUOC 4/6: Train TrOCR (Combine synthetic + %IMG_COUNT% real)
 echo ============================================================
 python train.py --use-real-data --combine --augment >> %LOGFILE% 2>&1
 if errorlevel 1 goto error
@@ -103,7 +94,7 @@ echo [OK] Buoc 5 hoan tat. Model: captcha_trocr_model/
 
 echo.
 echo ============================================================
-echo BUOC 6/6: Evaluate model tren %IMG_COUNT% anh real
+echo BUOC 5/6: Evaluate model tren %IMG_COUNT% anh real
 echo ============================================================
 python eval_model.py >> %LOGFILE% 2>&1
 if errorlevel 1 goto error
