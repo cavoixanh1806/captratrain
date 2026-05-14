@@ -40,8 +40,17 @@ python -c "import torch; print('CUDA:', torch.cuda.is_available(), '|', torch.cu
 
 ## Chạy toàn bộ bằng 1 lệnh
 
+Mở CMD trước (không double-click .bat), rồi chạy:
+
 ```bash
-venv\Scripts\activate & run_all.bat
+cmd /k "venv\Scripts\activate & run_all.bat"
+```
+
+Hoặc nếu đã mở CMD sẵn:
+
+```bash
+venv\Scripts\activate
+run_all.bat
 ```
 
 Workflow tự động chạy 5 bước:

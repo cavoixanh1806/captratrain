@@ -48,9 +48,11 @@ echo ============================================================
 echo Xem ket qua evaluation o tren.
 echo Model TrOCR luu o: ./captcha_trocr_model/
 echo Model U-Net luu o: ./captcha_unet_model.pth
+pause
 goto :eof
 
 :error
 echo.
 echo [ERROR] Co loi xay ra. Xem log de debug.
+pause
 exit /b 1
