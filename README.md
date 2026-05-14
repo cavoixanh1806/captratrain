@@ -140,8 +140,8 @@ Generating 4000 pairs for [val]...
 ```
 Device: cuda
 GPU: NVIDIA GeForce RTX 3060
-Train: 20000 samples, 625 batches
-Val:   4000 samples, 125 batches
+Train: 10000 samples, 312 batches
+Val:   2000 samples, 62 batches
 Model params: 7,763,041
 Training for 30 epochs...
 --------------------------------------------------------------------------------
