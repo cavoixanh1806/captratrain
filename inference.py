@@ -159,6 +159,24 @@ class CaptchaSolver:
         raw = predicted_text.strip().upper()
         result = raw[:5]
 
+        # Post-process: map ký tự ngoài charset về ký tự đúng
+        # CAPTCHA chỉ dùng 24 ký tự: ACDEFHJKLMNPQRTUVWXY3479
+        _CHAR_MAP = {
+            "O": "C",  # O giống C trong font này
+            "0": "9",  # 0 không tồn tại, gần 9
+            "I": "L",  # I giống L
+            "1": "7",  # 1 không tồn tại, gần 7
+            "S": "3",  # S giống 3
+            "5": "3",  # 5 không tồn tại, gần 3
+            "B": "R",  # B giống R
+            "8": "3",  # 8 không tồn tại
+            "G": "C",  # G giống C
+            "6": "4",  # 6 không tồn tại
+            "Z": "7",  # Z giống 7
+            "2": "7",  # 2 không tồn tại
+        }
+        result = "".join(_CHAR_MAP.get(c, c) for c in result)
+
         # Log warning nếu model sinh sai độ dài
         if len(raw) != 5:
             logger.warning(
@@ -211,7 +229,12 @@ class CaptchaSolver:
             skip_special_tokens=True,
         )
 
-        # Normalize: strip + uppercase + cắt 5 ký tự
+        # Normalize: strip + uppercase + cắt 5 ký tự + map charset
+        _CHAR_MAP = {
+            "O": "C", "0": "9", "I": "L", "1": "7",
+            "S": "3", "5": "3", "B": "R", "8": "3",
+            "G": "C", "6": "4", "Z": "7", "2": "7",
+        }
         processed = []
         for r in results:
             raw = r.strip().upper()
@@ -219,7 +242,8 @@ class CaptchaSolver:
                 logger.warning(
                     f"Batch: model output {len(raw)} chars instead of 5: '{raw}'"
                 )
-            processed.append(raw[:5])
+            mapped = "".join(_CHAR_MAP.get(c, c) for c in raw[:5])
+            processed.append(mapped)
 
         return processed
 

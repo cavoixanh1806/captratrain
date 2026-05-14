@@ -29,7 +29,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ─── Hằng số cấu hình ────────────────────────────────────────────────────────
-CHARSET: str = string.ascii_uppercase + string.digits  # A-Z + 0-9
+# Charset thuc te: 24 ky tu (phan tich tu 500 anh real)
+# Loai: O/0, I/1, S/5, B/8, G/6, Z/2 (cac cap de nham)
+CHARSET: str = "ACDEFHJKLMNPQRTUVWXY3479"
 MIN_CHARS: int = 5
 MAX_CHARS: int = 5
 TRAIN_COUNT: int = 10_000

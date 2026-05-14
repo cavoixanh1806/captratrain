@@ -31,7 +31,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-CHARSET: str = string.ascii_uppercase + string.digits
+# Charset thuc te: 24 ky tu (phan tich tu 500 anh real)
+# Loai: O/0, I/1, S/5, B/8, G/6, Z/2 (cac cap de nham)
+CHARSET: str = "ACDEFHJKLMNPQRTUVWXY3479"
 CAPTCHA_SIZE: int = 128
 TRAIN_COUNT: int = 10_000
 VAL_COUNT: int = 2_000
