@@ -524,6 +524,14 @@ def render_text_on_image(
 def generate_dataset(output_dir: Path, count: int, split_name: str) -> None:
     noisy_dir = output_dir / "noisy"
     mask_dir = output_dir / "mask"
+
+    # Xoa data cu truoc khi generate moi — tranh tich luy file thua
+    import shutil
+    if noisy_dir.exists():
+        shutil.rmtree(noisy_dir)
+    if mask_dir.exists():
+        shutil.rmtree(mask_dir)
+
     noisy_dir.mkdir(parents=True, exist_ok=True)
     mask_dir.mkdir(parents=True, exist_ok=True)
 
