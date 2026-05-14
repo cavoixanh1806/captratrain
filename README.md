@@ -271,6 +271,67 @@ VERDICT
 
 ---
 
+## Cấu hình hiện tại
+
+### Phần cứng tối ưu
+```
+GPU:  NVIDIA RTX 3060 8GB VRAM
+CPU:  Intel i5-12400F (6 cores / 12 threads)
+RAM:  16GB
+CUDA: 12.8+
+```
+
+### U-Net Denoiser
+```
+Model:          CaptchaUNet (7.7M params)
+Input:          (3, 128, 128) RGB
+Output:         (1, 128, 128) probability map
+Loss:           DiceBCE (50% Dice + 50% BCE)
+Optimizer:      Adam (lr=1e-3, weight_decay=1e-4)
+Scheduler:      CosineAnnealingLR (eta_min=1e-6)
+Batch size:     32
+Epochs:         30
+Train data:     20,000 pairs (real BG + synthetic text)
+Val data:       4,000 pairs
+Workers:        4
+```
+
+### TrOCR OCR
+```
+Base model:     microsoft/trocr-base-printed (~334M params)
+Input:          Preprocessed image (U-Net output)
+Output:         5 ký tự (A-Z, 0-9)
+Loss:           CrossEntropy (auto từ Seq2SeqTrainer)
+Optimizer:      AdamW (lr=5e-5, weight_decay=0.01)
+Warmup:         100 steps (~8% total)
+Batch size:     16
+Epochs:         50 (EarlyStopping patience=8)
+Train data:     400 real images (80% of 500)
+Val data:       100 real images (20% of 500)
+Beam search:    4 beams
+MAX_LENGTH:     8 tokens ([BOS] + 5 chars + [EOS] + 1 spare)
+FP16:           Enabled (mixed precision)
+Workers:        4
+Metric:         exact_match (best model saved by highest)
+Augmentation:   ElasticTransform, GridDistortion, GaussNoise, ColorJitter, Blur
+```
+
+### Data Generation (generate_unet_data.py)
+```
+Real BG source: data/real_backgrounds/ (500 extracted backgrounds)
+BG augment:     flip horizontal 50%, brightness ±15
+Text colors:    70% red/orange, 9% cyan/blue, 8% purple, 5% yellow
+Font:           Mix bold (60%) + regular (40%), per-character random
+Font size:      36-50px (capped at 50 to fit 128px canvas)
+Char overlap:   55% dense, 25% medium, 20% light
+Rotation:       65% ±5°, 21% ±15°, 11% ±30°, 3% ±44°
+Noise lines:    40% none, 40% 1-3 lines, 20% 3-6 lines (BG already has lines)
+Noise dots:     0-10 (very few)
+Wave distort:   50% probability, amplitude 1-3px
+```
+
+---
+
 ## Cập nhật code mới
 
 ```bash
