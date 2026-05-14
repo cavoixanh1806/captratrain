@@ -54,11 +54,20 @@ run_all.bat
 ```
 
 Workflow tự động chạy 5 bước:
-1. Extract 500 real backgrounds (inpainting xóa text)
-2. Generate 12K synthetic pairs (BG thật + text mới)
-3. Train U-Net denoiser (~10-15 phút)
-4. Train TrOCR (~30-60 phút)
-5. Evaluate trên 500 ảnh real → in kết quả
+1. Extract 754 real backgrounds (inpainting xóa text)
+2. Generate 12K U-Net pairs (BG thật + text mới)
+3. Generate 6K TrOCR synthetic samples (có label biết trước)
+4. Train U-Net denoiser (~10-15 phút)
+5. Train TrOCR với Combine synthetic+real (~60-90 phút)
+6. Evaluate trên 754 ảnh real → in kết quả
+
+## Import data mới
+
+Nếu có thêm ảnh mới (format `map_<LABEL>.png` trong thư mục `dataset/`):
+```bash
+python import_new_data.py
+```
+Tự động đổi tên + append vào `data/metadata.csv`.
 
 ## Chạy từng bước
 

@@ -22,6 +22,13 @@ if errorlevel 1 goto error
 
 echo.
 echo ============================================================
+echo BUOC 2.5/5: Generate TrOCR synthetic data (6K labeled samples)
+echo ============================================================
+python generate_trocr_synthetic.py
+if errorlevel 1 goto error
+
+echo.
+echo ============================================================
 echo BUOC 3/5: Train U-Net Denoiser (~10-15 phut)
 echo ============================================================
 python train_unet.py
@@ -29,9 +36,9 @@ if errorlevel 1 goto error
 
 echo.
 echo ============================================================
-echo BUOC 4/5: Train TrOCR voi U-Net preprocessing (~30-60 phut)
+echo BUOC 4/5: Train TrOCR voi U-Net preprocessing + Combine synthetic (~30-90 phut)
 echo ============================================================
-python train.py --use-real-data --augment
+python train.py --use-real-data --combine --augment
 if errorlevel 1 goto error
 
 echo.
