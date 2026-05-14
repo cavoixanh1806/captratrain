@@ -70,15 +70,13 @@ REAL_DATA_DIR: str = "data"
 # 500 * 0.8 = 400 train, batch=16 → 25 steps/epoch, 50 epochs → 1250 total steps
 BATCH_SIZE: int = 16
 LEARNING_RATE: float = 5e-5
-NUM_EPOCHS: int = 50
-SAVE_STEPS: int = 25         # Save mỗi ~1 epoch
-EVAL_STEPS: int = 25         # Eval mỗi ~1 epoch
-MAX_TARGET_LENGTH: int = 8   # [BOS] + 5 ASCII chars + [EOS] = 7 tokens, 8 dư sức
+NUM_EPOCHS: int = 100        # Tang tu 50 — model can nhieu epochs voi 400 anh
+SAVE_STEPS: int = 25
+EVAL_STEPS: int = 25
+MAX_TARGET_LENGTH: int = 12  # Tang tu 8 — du cho model sinh 5 chars, tranh truncate
 
-# FIX: Tăng patience từ 3 lên 8 — tránh dừng quá sớm với 500 ảnh
-# patience=3 → dừng sau 75 steps (~3 epochs) nếu CER không cải thiện
-# patience=8 → dừng sau 200 steps (~8 epochs) — hợp lý hơn
-EARLY_STOPPING_PATIENCE: int = 8
+# Tang patience len 20 — model can nhieu thoi gian de hoc voi 400 anh
+EARLY_STOPPING_PATIENCE: int = 20
 
 
 def compute_cer_metric(
@@ -181,12 +179,13 @@ def setup_model(processor: TrOCRProcessor) -> VisionEncoderDecoderModel:
     model.generation_config = GenerationConfig(
         max_length=MAX_TARGET_LENGTH,
         early_stopping=True,
-        length_penalty=1.0,          # FIX: 1.0 thay vì 2.0
-        num_beams=4,
-        # no_repeat_ngram_size bị bỏ — CAPTCHA có thể có ký tự lặp
+        length_penalty=2.0,          # Tang tu 1.0 — uu tien chuoi du 5 chars
+        num_beams=8,                 # Tang tu 4 — tim chuoi tot hon
         decoder_start_token_id=tokenizer.cls_token_id,
         eos_token_id=tokenizer.sep_token_id,
         pad_token_id=tokenizer.pad_token_id,
+        # Bat min_length de model bat buoc sinh du tokens
+        min_length=5,                # [BOS] + 5 chars toi thieu
     )
 
     logger.info("✅ Model đã được cấu hình thành công.")

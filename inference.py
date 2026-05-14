@@ -144,8 +144,10 @@ class CaptchaSolver:
         with torch.no_grad():
             generated_ids = self.model.generate(
                 pixel_values,
-                max_length=8,       # [BOS] + 5 ASCII chars + [EOS] = 7, 8 dư sức
-                num_beams=4,        # Beam search với 4 beams
+                max_length=12,
+                min_length=5,
+                num_beams=8,
+                length_penalty=2.0,
                 early_stopping=True,
             )
 
@@ -219,8 +221,10 @@ class CaptchaSolver:
         with torch.no_grad():
             generated_ids = self.model.generate(
                 pixel_values,
-                max_length=8,
-                num_beams=4,
+                max_length=12,
+                min_length=5,
+                num_beams=8,
+                length_penalty=2.0,
                 early_stopping=True,
             )
 
