@@ -46,7 +46,7 @@ venv\Scripts\activate & run_all.bat
 
 Workflow tự động chạy 5 bước:
 1. Extract 500 real backgrounds (inpainting xóa text)
-2. Generate 24K synthetic pairs (BG thật + text mới)
+2. Generate 12K synthetic pairs (BG thật + text mới)
 3. Train U-Net denoiser (~10-15 phút)
 4. Train TrOCR (~30-60 phút)
 5. Evaluate trên 500 ảnh real → in kết quả
@@ -291,8 +291,8 @@ Optimizer:      Adam (lr=1e-3, weight_decay=1e-4)
 Scheduler:      CosineAnnealingLR (eta_min=1e-6)
 Batch size:     32
 Epochs:         30
-Train data:     20,000 pairs (real BG + synthetic text)
-Val data:       4,000 pairs
+Train data:     10,000 pairs (real BG + synthetic text)
+Val data:       2,000 pairs
 Workers:        4
 ```
 
@@ -306,7 +306,7 @@ Workers:        4
 | `CosineAnnealingLR` | Đầu lr cao (học nhanh), cuối lr thấp (tinh chỉnh). Tốt hơn step decay |
 | `Batch=32` | Ảnh 128×128 nhỏ, RTX 3060 chứa dư. Batch lớn = gradient ổn định |
 | `30 epochs` | U-Net converge nhanh (task đơn giản: binary segmentation) |
-| `20K+4K` | Đủ diversity. Val 4K đo IoU chính xác |
+| `10K+2K` | Đủ diversity, giảm tải GPU (nhiệt ~60°C thay vì 70°C) |
 
 ### TrOCR OCR
 ```

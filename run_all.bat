@@ -15,7 +15,7 @@ if errorlevel 1 goto error
 
 echo.
 echo ============================================================
-echo BUOC 2/5: Generate U-Net training data (24K pairs)
+echo BUOC 2/5: Generate U-Net training data (12K pairs)
 echo ============================================================
 python generate_unet_data.py
 if errorlevel 1 goto error

@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 # ── Config ────────────────────────────────────────────────────────────────────
 CHARSET: str = string.ascii_uppercase + string.digits
 CAPTCHA_SIZE: int = 128
-TRAIN_COUNT: int = 20_000
-VAL_COUNT: int = 4_000
+TRAIN_COUNT: int = 10_000
+VAL_COUNT: int = 2_000
 OUTPUT_BASE: Path = Path("data/unet_pairs")
 REAL_BG_DIR: Path = Path("data/real_backgrounds")
 
