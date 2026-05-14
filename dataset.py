@@ -299,6 +299,10 @@ def create_datasets(
             augment=False,  # Không augment validation
         )
 
+        # Xóa temp CSV sau khi đã load vào memory
+        train_meta.unlink(missing_ok=True)
+        val_meta.unlink(missing_ok=True)
+
     else:
         # Dùng Synthetic Data
         synthetic_train_dir = Path(synthetic_train_dir)

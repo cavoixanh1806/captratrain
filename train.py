@@ -373,12 +373,6 @@ if __name__ == "__main__":
         help="Combine Synthetic + Real Data",
     )
     parser.add_argument(
-        "--preprocess",
-        action="store_true",
-        default=True,
-        help="Use U-Net preprocessing (always enabled)",
-    )
-    parser.add_argument(
         "--augment",
         action="store_true",
         help="Enable data augmentation (rotation, brightness, blur, elastic)",
