@@ -3,14 +3,15 @@ generate_unet_data.py
 =====================
 Generate synthetic CAPTCHA pairs for U-Net denoiser training.
 
-Version 4 — su dung REAL BACKGROUNDS extracted tu 500 anh that:
-- Background: real (extracted bang inpainting tu data/real_backgrounds/)
-- Text: synthetic (rendered len real BG voi label biet truoc)
-- Ket qua: BG giong real 100%, text van la synthetic nhung dat tren BG that
+BG synthetic calibrated tu phan tich 754 anh real:
+- BGR avg (160, 157, 156), saturation ~10
+- 70% pure gray, 24% blue-tinted, 6% other
+- 31% flat, 33% mild gradient, 36% complex texture
 
 Pipeline:
-1. Truoc do chay extract_real_backgrounds.py de tao data/real_backgrounds/
-2. Generate ngau nhien chon 1 BG real → render text len → save
+1. Generate BG synthetic giong real
+2. Render text len BG voi label biet truoc
+3. Save (noisy, mask) pair cho U-Net training
 
 Usage:
     python generate_unet_data.py
@@ -116,11 +117,12 @@ def random_text(length: int = 5) -> str:
 
 
 def get_random_real_background(size: int = 128) -> np.ndarray:
-    """Lay background — uu tien synthetic (chinh xac hon inpainting).
+    """Sinh BG synthetic giong real CAPTCHA — calibrated tu 754 anh real:
 
-    Sinh warm gray background giong real data:
-    - RGB avg (171, 164, 157), saturation thap
-    - 67% flat, 30% mild gradient, 4% patches
+    - BGR avg (160, 157, 156) — gan pure gray
+    - Saturation rat thap (avg 10)
+    - 70% pure gray, 24% blue-tinted, 6% other
+    - Texture: 31% flat, 33% mild, 36% complex (intra-image std~11)
 
     Args:
         size: kich thuoc (128).
@@ -128,24 +130,51 @@ def get_random_real_background(size: int = 128) -> np.ndarray:
     Returns:
         BGR numpy array (size, size, 3).
     """
-    # Base warm gray — R, G, B gan nhau de saturation thap
-    base_intensity = random.randint(140, 200)
-    base_r = base_intensity + random.randint(-5, 8)
-    base_g = base_intensity + random.randint(-5, 5)
-    base_b = base_intensity + random.randint(-8, 3)
-    base = np.array([base_b, base_g, base_r], dtype=np.float32)  # BGR
+    # === Color tint ===
+    tint_roll = random.random()
+    base_v = random.randint(140, 195)  # value avg 161
+
+    if tint_roll < 0.70:
+        # Pure gray (70%): R≈G≈B, sat<15
+        bgr_diff = random.randint(-5, 5)
+        base_b = base_v + bgr_diff + random.randint(-3, 3)
+        base_g = base_v + random.randint(-3, 3)
+        base_r = base_v - bgr_diff + random.randint(-3, 3)
+    elif tint_roll < 0.94:
+        # Blue-tinted (24%): B > R, sat 15-30
+        base_b = base_v + random.randint(5, 18)
+        base_g = base_v + random.randint(0, 5)
+        base_r = base_v - random.randint(5, 15)
+    elif tint_roll < 0.98:
+        # Green-tinted (4%)
+        base_g = base_v + random.randint(5, 15)
+        base_b = base_v + random.randint(-5, 5)
+        base_r = base_v - random.randint(5, 10)
+    else:
+        # Neutral/other (2%)
+        base_b = base_v + random.randint(-10, 10)
+        base_g = base_v + random.randint(-10, 10)
+        base_r = base_v + random.randint(-10, 10)
+
+    base = np.array([
+        np.clip(base_b, 50, 200),
+        np.clip(base_g, 50, 200),
+        np.clip(base_r, 50, 200),
+    ], dtype=np.float32)
 
     img = np.full((size, size, 3), base, dtype=np.float32)
 
+    # === Texture level (calibrated: 31% flat, 33% mild, 36% complex) ===
     texture_roll = random.random()
 
-    if texture_roll < 0.67:
-        # Flat
-        noise = np.random.normal(0, 2, img.shape).astype(np.float32)
+    if texture_roll < 0.31:
+        # Flat: noise nhe std ~3
+        noise = np.random.normal(0, random.uniform(2, 4), img.shape).astype(np.float32)
         img += noise
-    elif texture_roll < 0.97:
-        # Mild gradient
-        gradient_strength = random.uniform(5, 15)
+
+    elif texture_roll < 0.64:
+        # Mild: gradient + noise std ~7
+        gradient_strength = random.uniform(8, 18)
         direction = random.choice(["h", "v", "d"])
         for i in range(size):
             ratio = i / size
@@ -156,35 +185,36 @@ def get_random_real_background(size: int = 128) -> np.ndarray:
                 img[i, :] += shift
             else:
                 img[i, :] += shift * (1 - ratio * 0.5)
-        noise = np.random.normal(0, 3, img.shape).astype(np.float32)
+        noise = np.random.normal(0, random.uniform(5, 8), img.shape).astype(np.float32)
         img += noise
+
     else:
-        # Patches
-        num_patches = random.randint(2, 5)
+        # Complex (36% — tang nhieu so voi truoc): patches + noise manh
+        num_patches = random.randint(4, 10)
         for _ in range(num_patches):
-            patch_size = random.randint(15, 40)
+            patch_size = random.randint(20, 50)
             cx = random.randint(0, size - 1)
             cy = random.randint(0, size - 1)
             patch_color = base + np.array([
-                random.randint(-15, 15),
-                random.randint(-15, 15),
-                random.randint(-15, 15),
+                random.randint(-25, 25),
+                random.randint(-25, 25),
+                random.randint(-25, 25),
             ], dtype=np.float32)
             y1, y2 = max(0, cy - patch_size), min(size, cy + patch_size)
             x1, x2 = max(0, cx - patch_size), min(size, cx + patch_size)
             if y2 > y1 and x2 > x1:
                 yy, xx = np.ogrid[y1:y2, x1:x2]
                 dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
-                alpha = np.clip(1 - dist / patch_size, 0, 1) * 0.25
+                alpha = np.clip(1 - dist / patch_size, 0, 1) * 0.4
                 for c in range(3):
                     img[y1:y2, x1:x2, c] = (
                         img[y1:y2, x1:x2, c] * (1 - alpha)
                         + patch_color[c] * alpha
                     )
-        noise = np.random.normal(0, 4, img.shape).astype(np.float32)
+        noise = np.random.normal(0, random.uniform(8, 13), img.shape).astype(np.float32)
         img += noise
 
-    # Augment nhe
+    # Augment: flip horizontal
     if random.random() < 0.5:
         img = np.flip(img, axis=1).copy()
 
@@ -339,7 +369,7 @@ def render_text_on_image(
     Returns:
         (noisy_bgr, mask_gray).
     """
-    # Background — su dung REAL background tu data/real_backgrounds/
+    # Background — synthetic giong real (calibrated tu 754 anh)
     bg = get_random_real_background(size)
     noisy_pil = Image.fromarray(cv2.cvtColor(bg, cv2.COLOR_BGR2RGB)).convert("RGBA")
     mask_pil = Image.new("L", (size, size), 0)
