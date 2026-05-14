@@ -236,7 +236,7 @@ def get_training_args(output_dir: str) -> Seq2SeqTrainingArguments:
 
         # ── Tối ưu bộ nhớ ─────────────────────────────────────────────────────
         fp16=torch.cuda.is_available(),
-        dataloader_num_workers=4,
+        dataloader_num_workers=0,   # Windows không pickle được nested fn với workers>0
         dataloader_pin_memory=torch.cuda.is_available(),
         label_names=["labels"],
     )
