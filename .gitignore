@@ -10,6 +10,12 @@ checkpoint-*/
 
 # ── Data synthetic (tự tạo lại được) ──────────────────────
 data/synthetic/
+data/unet_pairs/
+data/real_backgrounds/
+data/preprocessed/
+
+# ── Model U-Net (tự train lại được) ──────────────────────
+captcha_unet_model.pth
 
 # ── File tạm của dataset.py ───────────────────────────────
 data/_train_meta.csv
