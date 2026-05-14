@@ -44,7 +44,7 @@ python -c "import torch; print('CUDA:', torch.cuda.is_available(), '|', torch.cu
 venv\Scripts\activate & run_all.bat
 ```
 
-Workflow tự động:
+Workflow tự động chạy 5 bước:
 1. Extract 500 real backgrounds (inpainting xóa text)
 2. Generate 24K synthetic pairs (BG thật + text mới)
 3. Train U-Net denoiser (~10-15 phút)
@@ -75,7 +75,7 @@ python train.py --use-real-data --augment
 python evaluate.py
 ```
 
-## Inference
+## Inference (sau khi train xong)
 
 ```python
 from inference import CaptchaSolver
@@ -84,7 +84,7 @@ solver = CaptchaSolver(model_dir="./captcha_trocr_model")
 result = solver.solve_captcha("data/map_00001.png")
 print(result)  # "4KTN9"
 
-# Batch
+# Batch — nhanh hơn khi giải nhiều ảnh
 results = solver.solve_batch(["img1.png", "img2.png"])
 ```
 
@@ -92,25 +92,184 @@ results = solver.solve_batch(["img1.png", "img2.png"])
 python inference.py data/map_00001.png
 ```
 
-## Đọc output khi train
+---
 
-### U-Net (mỗi epoch):
-```
-Epoch 5/30 | Train Loss: 0.082, IoU: 0.823 | Val Loss: 0.091, IoU: 0.801
-```
-- **Val IoU > 0.85** = U-Net tốt
+## Giải thích log khi train
 
-### TrOCR (mỗi 25 steps):
-```
-{'eval_cer': 0.08, 'eval_exact_match': 0.87, 'epoch': 12.0}
-```
-- **eval_exact_match > 0.90** = đạt mục tiêu
+### Bước 2 — Extract backgrounds
 
-### Evaluate output:
 ```
-Exact match acc:  91.20%   ← mục tiêu ≥ 90%
-CER:               4.30%   ← mục tiêu < 10%
+Tim thay 500 anh. Bat dau extract backgrounds...
+  50/500 — processed=50, failed=0
+  100/500 — processed=100, failed=0
+  ...
+[DONE] Processed 500/500 backgrounds
 ```
+
+| Log | Ý nghĩa |
+|-----|---------|
+| `processed=500` | Số ảnh đã xóa text thành công |
+| `failed=0` | Số ảnh bị lỗi đọc file (bình thường = 0) |
+
+---
+
+### Bước 3 — Generate U-Net data
+
+```
+Loaded 500 real backgrounds vao cache
+Generating 20000 pairs for [train]...
+  [train] 2000/20000 pairs done
+  [train] 4000/20000 pairs done
+  ...
+  [train] Done: 20000 pairs saved
+Generating 4000 pairs for [val]...
+  [val] Done: 4000 pairs saved
+[DONE] U-Net training data saved to: data/unet_pairs
+```
+
+| Log | Ý nghĩa |
+|-----|---------|
+| `Loaded 500 real backgrounds` | Đã load BG thật vào RAM |
+| `20000 pairs` | Mỗi pair = 1 ảnh noisy + 1 mask (text=trắng, bg=đen) |
+| `train/val` | 20K train + 4K validation |
+
+---
+
+### Bước 4 — Train U-Net
+
+```
+Device: cuda
+GPU: NVIDIA GeForce RTX 3060
+Train: 20000 samples, 625 batches
+Val:   4000 samples, 125 batches
+Model params: 7,763,041
+Training for 30 epochs...
+--------------------------------------------------------------------------------
+Epoch   1/30 (45.2s) | Train Loss: 0.4521, IoU: 0.3214 | Val Loss: 0.3812, IoU: 0.4523, Acc: 0.8234
+  -> Best model saved (IoU: 0.4523)
+Epoch   2/30 (44.8s) | Train Loss: 0.2134, IoU: 0.5678 | Val Loss: 0.1923, IoU: 0.6234, Acc: 0.9012
+  -> Best model saved (IoU: 0.6234)
+...
+Epoch  25/30 (44.5s) | Train Loss: 0.0312, IoU: 0.8912 | Val Loss: 0.0398, IoU: 0.8756, Acc: 0.9823
+  -> Best model saved (IoU: 0.8756)
+Epoch  30/30 (44.3s) | Train Loss: 0.0289, IoU: 0.9012 | Val Loss: 0.0412, IoU: 0.8734, Acc: 0.9812
+--------------------------------------------------------------------------------
+[DONE] Best val IoU: 0.8756 at epoch 25
+Model saved to: captcha_unet_model.pth
+```
+
+| Log | Ý nghĩa | Tốt khi |
+|-----|---------|---------|
+| `Train Loss` | Sai số DiceBCE trên tập train — model đang học | Giảm dần |
+| `Val Loss` | Sai số trên ảnh chưa thấy — đo generalization | Giảm dần, gần Train Loss |
+| `IoU` | % vùng chữ tách đúng (Intersection over Union) | **> 0.85** |
+| `Acc` | % pixel phân loại đúng (text/background) | > 0.95 |
+| `Best model saved` | Lưu model tốt nhất (IoU cao nhất trên val) | Tự động |
+
+**Cách đọc:**
+- IoU tăng dần từ 0.32 → 0.87 = model đang học tốt
+- Val IoU > 0.85 = U-Net đã tách chữ chính xác
+- Nếu Val Loss tăng trong khi Train Loss giảm = overfitting (cần thêm data)
+
+---
+
+### Bước 5 — Train TrOCR
+
+```
+🚀 Sử dụng GPU: NVIDIA GeForce RTX 3060
+Đang load TrOCRProcessor từ: microsoft/trocr-base-printed
+Mode: Real Data + Preprocessing(unet) + Augmentation
+Train samples: 400
+Val samples:   100
+✅ Model đã được cấu hình thành công.
+🏋️  Bắt đầu fine-tuning...
+{'loss': 3.29, 'learning_rate': 5e-05, 'epoch': 4.0}
+{'eval_loss': 2.81, 'eval_cer': 0.85, 'eval_exact_match': 0.02, 'epoch': 4.0}
+{'loss': 1.52, 'learning_rate': 4.5e-05, 'epoch': 8.0}
+{'eval_loss': 1.23, 'eval_cer': 0.42, 'eval_exact_match': 0.18, 'epoch': 8.0}
+{'loss': 0.68, 'learning_rate': 3.8e-05, 'epoch': 16.0}
+{'eval_loss': 0.54, 'eval_cer': 0.15, 'eval_exact_match': 0.62, 'epoch': 16.0}
+{'loss': 0.31, 'learning_rate': 2.5e-05, 'epoch': 28.0}
+{'eval_loss': 0.28, 'eval_cer': 0.06, 'eval_exact_match': 0.88, 'epoch': 28.0}
+{'loss': 0.18, 'learning_rate': 1.2e-05, 'epoch': 40.0}
+{'eval_loss': 0.21, 'eval_cer': 0.04, 'eval_exact_match': 0.92, 'epoch': 40.0}
+[SAVE] Best model saved to: ./captcha_trocr_model
+[DONE] Training complete!
+```
+
+| Log | Ý nghĩa | Tốt khi |
+|-----|---------|---------|
+| `loss` | Sai số trên tập train | Giảm dần (3.29 → 0.18) |
+| `eval_loss` | Sai số trên 100 ảnh val | Giảm dần |
+| `eval_cer` | % ký tự sai (Character Error Rate) | **< 0.10** (dưới 10%) |
+| `eval_exact_match` | % ảnh đoán đúng hoàn toàn 5/5 ký tự | **≥ 0.90** (90%+) |
+| `learning_rate` | Tốc độ học — tự giảm dần | Không cần quan tâm |
+| `epoch` | Số lần lặp qua toàn bộ 400 ảnh train | Chỉ để theo dõi |
+
+**Cách đọc:**
+- `eval_exact_match` tăng dần: 0.02 → 0.18 → 0.62 → 0.88 → 0.92
+- Khi đạt 0.90+ = model đã đạt mục tiêu
+- Training tự dừng nếu `exact_match` không cải thiện sau 8 lần eval liên tiếp
+
+**Ví dụ thực tế:**
+```
+eval_cer: 0.85 → sai gần hết (mới bắt đầu học)
+eval_cer: 0.42 → sai 2/5 ký tự trung bình
+eval_cer: 0.15 → sai ~1 ký tự / ảnh
+eval_cer: 0.04 → gần hoàn hảo (sai 0.2 ký tự / ảnh)
+
+eval_exact_match: 0.02 → chỉ 2% ảnh đúng hoàn toàn
+eval_exact_match: 0.62 → 62% ảnh đúng
+eval_exact_match: 0.92 → 92% ảnh đúng ← MỤC TIÊU ĐẠT
+```
+
+---
+
+### Bước 6 — Evaluate
+
+```
+============================================================
+EVALUATION RESULTS
+============================================================
+Total samples:       500
+Exact match correct: 456
+Exact match acc:     91.20%
+CER:                 4.30%
+
+Per-position accuracy:
+  Position 1: 97.40%
+  Position 2: 96.80%
+  Position 3: 95.60%
+  Position 4: 94.20%
+  Position 5: 93.80%
+
+Top 10 confusions (label → predicted):
+  0 → O: 8
+  1 → I: 5
+  8 → B: 4
+  5 → S: 3
+  ...
+
+============================================================
+VERDICT
+============================================================
+[EXCELLENT] Exact match 91.2% >= 90% — DAT MUC TIEU!
+```
+
+| Log | Ý nghĩa |
+|-----|---------|
+| `Exact match acc: 91.20%` | 456/500 ảnh đoán đúng hoàn toàn 5/5 ký tự |
+| `CER: 4.30%` | Trung bình sai 4.3% ký tự (0.2 ký tự / ảnh) |
+| `Per-position accuracy` | Độ chính xác từng vị trí (1-5) — vị trí cuối thường kém hơn |
+| `Top 10 confusions` | Những cặp ký tự hay bị nhầm (0↔O, 1↔I, 8↔B...) |
+| `[EXCELLENT]` | Đạt mục tiêu 90%+ |
+
+**Nếu chưa đạt 90%:**
+- `[GOOD] 80-89%` → Tăng epochs hoặc thêm data
+- `[OK] 50-79%` → Kiểm tra U-Net IoU, có thể BG extraction chưa tốt
+- `[FAIL] <50%` → Kiểm tra metadata.csv có đúng label không
+
+---
 
 ## Cập nhật code mới
 
