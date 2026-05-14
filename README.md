@@ -296,6 +296,18 @@ Val data:       4,000 pairs
 Workers:        4
 ```
 
+**Giải thích U-Net:**
+
+| Tham số | Tại sao chọn giá trị này |
+|---------|--------------------------|
+| `DiceBCE Loss` | Text chỉ chiếm 15-20% ảnh → class imbalance. BCE bias về BG. Dice focus vào overlap → cân bằng |
+| `lr=1e-3` | U-Net train from scratch → cần lr cao. TrOCR fine-tune nên lr thấp hơn (5e-5) |
+| `weight_decay=1e-4` | Regularization nhẹ tránh overfitting trên synthetic data |
+| `CosineAnnealingLR` | Đầu lr cao (học nhanh), cuối lr thấp (tinh chỉnh). Tốt hơn step decay |
+| `Batch=32` | Ảnh 128×128 nhỏ, RTX 3060 chứa dư. Batch lớn = gradient ổn định |
+| `30 epochs` | U-Net converge nhanh (task đơn giản: binary segmentation) |
+| `20K+4K` | Đủ diversity. Val 4K đo IoU chính xác |
+
 ### TrOCR OCR
 ```
 Base model:     microsoft/trocr-base-printed (~334M params)
@@ -315,6 +327,21 @@ Workers:        4
 Metric:         exact_match (best model saved by highest)
 Augmentation:   ElasticTransform, GridDistortion, GaussNoise, ColorJitter, Blur
 ```
+
+**Giải thích TrOCR:**
+
+| Tham số | Tại sao chọn giá trị này |
+|---------|--------------------------|
+| `lr=5e-5` | Fine-tune model pretrained → lr cao phá weights đã học. 5e-5 là chuẩn transformer |
+| `warmup=100` | Đầu training lr tăng dần 0→5e-5, tránh gradient explosion khi weights chưa ổn |
+| `weight_decay=0.01` | Regularization mạnh hơn U-Net vì chỉ có 400 ảnh (ít data, dễ overfit) |
+| `Batch=16` | TrOCR 334M params lớn hơn U-Net 7.7M → cần nhiều VRAM hơn → batch nhỏ hơn |
+| `50 epochs + patience=8` | 400 ảnh ít → cần nhiều epochs. EarlyStopping dừng sớm nếu converge |
+| `Beam=4` | Tìm 4 chuỗi xác suất cao nhất, chọn tốt nhất. >4 chậm mà không tăng accuracy |
+| `MAX_LENGTH=8` | CAPTCHA 5 ký tự + [BOS] + [EOS] = 7. Dư 1 token an toàn |
+| `FP16` | Giảm VRAM 50%, tăng tốc 30%. Không ảnh hưởng accuracy trên RTX 3060 |
+| `exact_match` | CAPTCHA 1 ký tự sai = fail → chọn model theo exact_match, không phải CER |
+| `Augmentation` | 400 ảnh quá ít → augmentation tạo biến thể mới mỗi epoch ≈ 2000-3000 ảnh |
 
 ### Data Generation (generate_unet_data.py)
 ```
