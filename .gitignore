@@ -13,6 +13,11 @@ data/synthetic/
 data/unet_pairs/
 data/real_backgrounds/
 data/preprocessed/
+data/sample_*.png
+data/_test_*.png
+
+# ── Dataset incoming (chỉ chứa ảnh chờ import) ────────────
+dataset/
 
 # ── Model U-Net (tự train lại được) ──────────────────────
 captcha_unet_model.pth
