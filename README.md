@@ -35,31 +35,44 @@ pip install albumentations==1.4.3
 
 ## Chạy toàn bộ bằng 1 lệnh
 
-Mở CMD, chạy:
 ```bash
 venv\Scripts\activate
 run_all.bat
 ```
 
 Script tự động:
-- Xóa model cũ + train lại từ đầu
 - Detect số ảnh `map_*.png` trong `data/` (dynamic)
-- Import ảnh mới từ `dataset/` nếu có
-- Dừng ngay khi có lỗi + hiện thông báo
-- Log toàn bộ output ra `train_log.txt`
+- Import ảnh mới từ `dataset/` nếu có (idempotent)
+- Xóa model cũ + train lại từ đầu
+- Dừng ngay khi có lỗi
+- Log toàn bộ ra `train_log.txt`
+
+## Workflow
+
+```
+754 real images (data/)
+       |
+       ├── (auto import từ dataset/ nếu có)
+       |
+       ▼
+[1] Generate U-Net data (12K synthetic noisy+mask pairs)
+       ▼
+[2] Generate TrOCR synthetic data (5K labeled samples)
+       ▼
+[3] Train U-Net (DiceBCE loss, 30 epochs, IoU > 0.85)
+       ▼
+[4] Train TrOCR (combine 5K synthetic + 600 real, 100 epochs)
+       ▼
+[5] Evaluate trên 754 real images
+```
 
 ## Thêm data mới
 
-Đặt ảnh mới vào thư mục `dataset/` với format tên: `map_<LABEL>.png`
+Đặt ảnh mới vào `dataset/` với format: `map_<LABEL>.png`
 
 Ví dụ: `map_4KTN9.png`, `map_WTVRY.png`
 
-Khi chạy `run_all.bat`, script tự import vào `data/` + cập nhật `metadata.csv`.
-
-Hoặc import thủ công:
-```bash
-python import_new_data.py
-```
+Khi chạy `run_all.bat`, script tự import vào `data/` + cập nhật `metadata.csv`. Ảnh đã có sẽ skip (check label trùng).
 
 ## Chạy từng bước
 
@@ -69,10 +82,10 @@ venv\Scripts\activate
 # Gán nhãn (nếu chưa có metadata.csv)
 python label_server.py
 
-# Extract backgrounds
-python extract_real_backgrounds.py
+# Import data mới từ dataset/
+python import_new_data.py
 
-# Generate U-Net data
+# Generate U-Net data (synthetic noisy+mask pairs)
 python generate_unet_data.py
 
 # Generate TrOCR synthetic data (có label)
@@ -115,6 +128,16 @@ Số:  3 4 7 9                                    (4)
 
 Loại: O/0, I/1, S/5, B/8, G/6, Z/2 (các cặp dễ nhầm).
 
+## Synthetic BG (calibrated từ 754 ảnh real)
+
+Background được sinh giống real CAPTCHA:
+- BGR avg (160, 157, 156) — gần pure gray
+- Saturation rất thấp (avg 10)
+- 70% pure gray, 24% blue-tinted, 6% other
+- 31% flat, 33% mild gradient, **36% complex texture**
+
+Không dùng inpainting (vì không xóa sạch chữ → ghost chữ).
+
 ## Đọc output khi train
 
 ### U-Net:
@@ -147,6 +170,27 @@ CER:               4.30%
 | Batch | 32 | 16 |
 | Beams | — | 8 |
 | FP16 | — | ✅ |
+
+## Cấu trúc project
+
+```
+captratrain/
+├── data/                       # 754 real ảnh + metadata.csv
+├── dataset/                    # Nơi đặt ảnh mới chờ import
+├── unet_model.py               # U-Net architecture
+├── train_unet.py               # Train U-Net
+├── generate_unet_data.py       # Sinh U-Net training pairs
+├── generate_trocr_synthetic.py # Sinh TrOCR labeled data
+├── import_new_data.py          # Import ảnh mới từ dataset/
+├── preprocessing.py            # U-Net preprocessing wrapper
+├── dataset.py                  # CaptchaDataset cho TrOCR
+├── train.py                    # Train TrOCR
+├── inference.py                # CaptchaSolver
+├── eval_model.py               # Đánh giá model
+├── label_server.py             # Web UI gán nhãn
+├── run_all.bat                 # Chạy toàn bộ workflow
+└── train_log.txt               # Log file (auto generated)
+```
 
 ## Cập nhật code
 
