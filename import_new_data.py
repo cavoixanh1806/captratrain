@@ -52,9 +52,8 @@ def main():
         logger.warning("Khong co anh moi nao de import.")
         return
 
-    # Set cac filename da co (de tranh duplicate)
-    existing_filenames = set(df["filename"].tolist())
-    existing_labels = set(df["text"].str.upper().tolist())
+    # Set cac label da co (de tranh import trung anh cung label)
+    existing_labels = set(df["text"].str.strip().str.upper().tolist())
 
     new_rows = []
     skipped_duplicate = 0
@@ -76,24 +75,20 @@ def main():
             skipped_invalid += 1
             continue
 
-        # Check duplicate label (anh khac cung label cung OK, neu co thi van add)
-        # → khong skip vi co the la anh CAPTCHA khac voi cung text
+        # Check duplicate: neu label da co trong metadata → skip (anh da import truoc do)
+        if label in existing_labels:
+            skipped_duplicate += 1
+            continue
 
         # Tao filename moi
         new_filename = f"map_{next_num:05d}.png"
-
-        # Skip neu trung filename (it khi xay ra)
-        if new_filename in existing_filenames:
-            logger.warning(f"  Trung filename: {new_filename}")
-            skipped_duplicate += 1
-            continue
 
         # Copy file
         dst_path = TARGET_DIR / new_filename
         shutil.copy2(src_path, dst_path)
 
         new_rows.append({"filename": new_filename, "text": label})
-        existing_filenames.add(new_filename)
+        existing_labels.add(label)  # Track de khong import trung
         next_num += 1
 
     if new_rows:
