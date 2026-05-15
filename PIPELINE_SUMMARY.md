@@ -14,7 +14,7 @@ CAPTCHA 128×128 RGB
   Resize 64×320 (ratio 1:5, kéo dãn ngang)
        │
        ▼
-  CRNN: CNN 7-block + BiLSTM(256) × 2  (~8.7M params)
+  CRNN: CNN 7-block + BiLSTM(128) × 2  (~2.18M params)
        │
        ▼
   Output (T=79, B, 25 classes: 24 chars + 1 CTC blank)
@@ -29,7 +29,7 @@ CAPTCHA 128×128 RGB
 |---|---|
 | `crnn_model.py` | CRNN architecture + CTC encode/decode/save/load/ONNX |
 | `dataset_crnn.py` | Dataset + augmentation (Affine, ColorJitter, Noise, Blur, Cutout) + collate CTC |
-| `train_crnn.py` | Train pipeline tối giản (50 epochs, AdamW + warmup-cosine + AMP fp16, **không EMA, không EarlyStopping**) |
+| `train_crnn.py` | Train pipeline tối giản (200 epochs, AdamW + warmup-cosine + AMP fp16, **không EMA, không EarlyStopping**) |
 | `eval_crnn.py` | Eval suite (exact_match, CER, per-position, confusions, confidence) |
 | `inference_crnn.py` | CRNNCaptchaSolver (CLI + Python API) |
 | `self_train.py` | Self-training round 2 (chạy riêng khi cần) |
@@ -37,14 +37,14 @@ CAPTCHA 128×128 RGB
 | `synthetic_renderer.py` | Render text trên BG calibrated từ 754 real |
 | `system_info.py` | Check máy + verdict (READY/MARGINAL/CPU_ONLY/NOT_RECOMMENDED) |
 | `run_smoke.bat` | **Smoke test nhanh** (5 epochs, batch 16, ~30-60 phút CPU) |
-| `run_all.bat` | **Train chính** (50 epochs, batch 64, ~30-45 phút RTX 3060) |
+| `run_all.bat` | **Train chính** (200 epochs, batch 32, ~30-45 phút RTX 3060) |
 
 ## ⚙️ Hyperparams
 
 | Tham số | Giá trị |
 |---|---|
 | Backbone | CNN 7 blocks + BiLSTM(256) × 2 |
-| Params | 8.7M |
+| Params | 2.18M |
 | Loss | CTCLoss (blank=0, zero_infinity=True) |
 | Optimizer | AdamW (weight_decay=1e-4) |
 | LR | 1e-3 → linear warmup 200 → cosine → 1e-5 |

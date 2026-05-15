@@ -6,7 +6,7 @@ CRNN (CNN + BiLSTM + CTC) cho Minecraft Map CAPTCHA.
 Theo research doc: CRNN+CTC là SOTA classic cho fixed-charset captcha,
 hỗ trợ ký tự chồng đè qua CTC alignment ngầm.
 
-Architecture (~8.7M params):
+Architecture (~2.18M params):
     Input:    (B, 3, 64, 320) — RGB resized (1:5 aspect, kéo dãn ngang)
     CNN:      backbone 7 conv blocks, downsample H/16, W/4
                 → (B, 512, h≈4, w=80)
@@ -78,7 +78,7 @@ class CRNN(nn.Module):
     def __init__(
         self,
         num_classes: int = NUM_CLASSES,
-        hidden_size: int = 256,
+        hidden_size: int = 128,
     ) -> None:
         super().__init__()
         self.num_classes = num_classes
@@ -86,17 +86,17 @@ class CRNN(nn.Module):
         # ── CNN backbone ──────────────────────────────────────────────────────
         # Input: (B, 3, 64, 256). Goal: collapse H to ~1, keep W large for CTC.
         self.cnn = nn.Sequential(
-            ConvBlock(3, 64),                  # 64x256
+            ConvBlock(3, 32),                  # 64x256
             nn.MaxPool2d(2, 2),                # 32x128
-            ConvBlock(64, 128),                # 32x128
+            ConvBlock(32, 64),                 # 32x128
             nn.MaxPool2d(2, 2),                # 16x64
-            ConvBlock(128, 256),               # 16x64
-            ConvBlock(256, 256),               # 16x64
+            ConvBlock(64, 128),                # 16x64
+            ConvBlock(128, 128),               # 16x64
             nn.MaxPool2d((2, 1), (2, 1)),      # 8x64 (only H halved)
-            ConvBlock(256, 512),               # 8x64
-            ConvBlock(512, 512),               # 8x64
+            ConvBlock(128, 256),               # 8x64
+            ConvBlock(256, 256),               # 8x64
             nn.MaxPool2d((2, 1), (2, 1)),      # 4x64
-            ConvBlock(512, 512, kernel=2, pad=0),  # 3x63
+            ConvBlock(256, 256, kernel=2, pad=0),  # 3x63
         )
 
         # ── Sequence head ─────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ class CRNN(nn.Module):
 
         # 2-layer BiLSTM
         self.rnn = nn.LSTM(
-            input_size=512,
+            input_size=256,
             hidden_size=hidden_size,
             num_layers=2,
             bidirectional=True,

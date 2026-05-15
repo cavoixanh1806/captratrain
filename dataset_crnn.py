@@ -61,12 +61,14 @@ def _build_albu_aug(strong: bool = True) -> "A.Compose | None":
     if strong:
         return A.Compose([
             A.Affine(
-                rotate=(-5, 5),
-                translate_percent=(-0.04, 0.04),
-                scale=(0.95, 1.05),
-                p=0.5,
+                rotate=(-12, 12),
+                translate_percent=(-0.06, 0.06),
+                scale=(0.85, 1.15),
+                shear=(-5, 5),
+                p=0.6,
                 mode=cv2.BORDER_REFLECT_101,
             ),
+            A.Perspective(scale=(0.02, 0.08), p=0.3),
             A.RandomBrightnessContrast(
                 brightness_limit=0.2, contrast_limit=0.2, p=0.5,
             ),
@@ -98,8 +100,9 @@ _TRAIN_AUG = _build_albu_aug(strong=True) if _HAS_ALBU else None
 
 # Torchvision fallback nếu không có albumentations
 _TV_TRAIN_AUG = transforms.Compose([
-    transforms.RandomAffine(degrees=5, translate=(0.04, 0.04), scale=(0.95, 1.05)),
-    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
+    transforms.RandomAffine(degrees=12, translate=(0.06, 0.06), scale=(0.85, 1.15), shear=5),
+    transforms.RandomPerspective(distortion_scale=0.2, p=0.3),
+    transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.08),
 ])
 
 

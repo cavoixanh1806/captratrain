@@ -10,7 +10,7 @@ Tạm thời KHÔNG dùng:
     - Synthetic data (chạy `python generate_synthetic_crnn.py` riêng nếu cần)
 
 Pipeline hiện tại:
-    1. Load CRNN (~8.7M params)
+    1. Load CRNN (~2.18M params)
     2. Loss: CTCLoss + zero_infinity=True
     3. Optimizer: AdamW lr=1e-3, weight_decay=1e-4
     4. LR schedule: linear warmup 200 steps → cosine decay (per-batch step)
@@ -21,7 +21,7 @@ Pipeline hiện tại:
     9. ONNX export cuối cùng
 
 Usage:
-    python train_crnn.py                         # default: 50 epochs, real only
+    python train_crnn.py                         # default: 200 epochs, real only
     python train_crnn.py --epochs 80
     python train_crnn.py --use-synthetic         # bật synthetic (cần generate trước)
     python train_crnn.py --resume                # resume from last
@@ -64,8 +64,8 @@ CHECKPOINT_PATH: str = "captcha_crnn_model.pth"
 ONNX_PATH: str = "captcha_crnn_model.onnx"
 LAST_CHECKPOINT_PATH: str = "captcha_crnn_last.pth"
 
-DEFAULT_EPOCHS: int = 50
-DEFAULT_BATCH_SIZE: int = 64
+DEFAULT_EPOCHS: int = 200
+DEFAULT_BATCH_SIZE: int = 32
 DEFAULT_LR: float = 1e-3
 WARMUP_STEPS: int = 200
 GRAD_CLIP_NORM: float = 5.0

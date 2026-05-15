@@ -403,7 +403,7 @@ def assess_training(report: dict[str, Any]) -> dict[str, Any]:
     elif ram_gb >= 8 and disk_free_gb >= 3:
         verdict = "CPU_ONLY"
         time_estimate = (
-            "~10-15h với pipeline mặc định (754 real × 50 epochs). "
+            "~10-15h với pipeline mặc định (754 real × 200 epochs). "
             "Khuyến nghị smoke-test với --epochs 5 → ~1-2h"
         )
     else:

@@ -20,7 +20,7 @@ Single-context layout. Read `CONTEXT.md` at root + `docs/adr/` for architectural
 
 This is a CAPTCHA solver for Minecraft Map CAPTCHA using CRNN+CTC architecture.
 - **Goal**: exact_match ≥ 90%, CER ≤ 10%
-- **Model**: CNN (7 blocks) + BiLSTM (2 layers, hidden=256) ~8.7M params
+- **Model**: CNN (7 blocks) + BiLSTM (2 layers, hidden=128) ~2.18M params
 - **Input**: 128×128 RGB → resize 64×320 (ratio 1:5)
 - **Output**: 5 chars from 24-char charset (A,C,D,E,F,H,J,K,L,M,N,P,Q,R,T,U,V,W,X,Y,3,4,7,9)
 

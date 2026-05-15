@@ -18,7 +18,7 @@ CAPTCHA 128×128 RGB
            ▼
   ┌────────────────┐
   │ CRNN backbone  │  CNN (7 blocks) + BiLSTM (2 layers, hidden=256)
-  │ ~8.7M params   │  Output: (T=79, B, 25)
+  │ ~2.18M params   │  Output: (T=79, B, 25)
   └────────┬───────┘
            ▼
   ┌────────────────┐
@@ -83,7 +83,7 @@ Log toàn bộ ra `train_log.txt`.
        │
        ▼
 [1] Train CRNN+CTC trên 754 real (val 15% real)
-       │   - 50 epochs, train hết (KHÔNG early stop)
+       │   - 200 epochs, train hết (KHÔNG early stop)
        │   - AdamW lr=1e-3, warmup 200 steps + cosine decay
        │   - AMP fp16, batch=64
        │   - Augmentation đầy đủ (Affine, ColorJitter, Noise, Blur, Cutout)
@@ -240,7 +240,7 @@ Top 10 confusions:
 | Tham số | Giá trị |
 |---|---|
 | Backbone | CNN 7 blocks + BiLSTM 2-layer (hidden=256) |
-| Params | ~8.7M |
+| Params | ~2.18M |
 | Loss | CTCLoss (blank=0, zero_infinity=True) |
 | Optimizer | AdamW (weight_decay=1e-4) |
 | LR | 1e-3 → linear warmup 200 steps → cosine decay → 1e-5 |
@@ -305,7 +305,7 @@ nhưng nâng cấp toàn diện. Các thay đổi đều **TĂNG accuracy**, kh�
 | Yếu tố | Repo gốc (tutorial 200 dòng) | Pipeline này | Tác động |
 |---|---|---|---|
 | Architecture | 2 conv + Linear + GRU(32) | 7 conv + AdaptivePool + LSTM(256) | +40% (model 100× lớn hơn) |
-| Params | ~80K | 8.7M | Đủ học charset 24 + noise |
+| Params | ~80K | 2.18M | Đủ học charset 24 + noise |
 | Input | 75×300 | 64×320 | T=79 timesteps, +6% so với 74 |
 | CTC decode | `remove_duplicates` (sai chuẩn) | `decode_greedy` chuẩn | +5-10% không lẫn ký tự |
 | Optimizer | Adam + ReduceLROnPlateau | AdamW + warmup + cosine | Stability +1-2% |
@@ -320,7 +320,7 @@ nhưng nâng cấp toàn diện. Các thay đổi đều **TĂNG accuracy**, kh�
 
 **Kết quả kỳ vọng**:
 - Repo gốc trên dataset chuẩn: ~85-90% sau 200 epochs
-- Pipeline này trên Minecraft CAPTCHA (phức tạp hơn): **88-94% sau 50 epochs round 1, 90-95% sau self-train round 2**
+- Pipeline này trên Minecraft CAPTCHA (phức tạp hơn): **88-94% sau 200 epochs round 1, 90-95% sau self-train round 2**
 
 ## Cấu trúc project
 

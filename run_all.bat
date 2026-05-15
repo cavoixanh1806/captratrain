@@ -70,7 +70,7 @@ if exist captcha_crnn_last.pth del /q captcha_crnn_last.pth
 echo.
 
 echo ============================================================
-echo BUOC 1/2: Train CRNN+CTC (50 epochs, %IMG_COUNT% real, augment ON)
+echo BUOC 1/2: Train CRNN+CTC (200 epochs, %IMG_COUNT% real, augment ON)
 echo ============================================================
 %PY% train_crnn.py 2>&1 | %PY% -c "import sys; f=open('%LOGFILE%', 'a', encoding='utf-8'); [(sys.stdout.write(l), f.write(l), f.flush()) for l in sys.stdin]"
 if errorlevel 1 goto error

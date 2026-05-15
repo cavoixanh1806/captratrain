@@ -20,7 +20,7 @@ Tập 24 ký tự được phép trong captcha: `ACDEFHJKLMNPQRTUVWXY3479`. Các
 ## Model Architecture
 
 ### crnn
-Convolutional RNN — CNN backbone (7 blocks) + BiLSTM (2 layers, hidden=256). ~8.7M params. Input 64×320 → Output (T=79, B, 25).
+Convolutional RNN — CNN backbone (7 blocks) + BiLSTM (2 layers, hidden=128). ~2.18M params. Input 64×320 → Output (T=79, B, 25).
 
 ### ctc
 Connectionist Temporal Classification. Loss function và decoder cho sequence alignment. Blank token = index 0.
