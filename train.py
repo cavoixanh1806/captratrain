@@ -70,9 +70,9 @@ REAL_DATA_DIR: str = "data"
 # 500 * 0.8 = 400 train, batch=16 → 25 steps/epoch, 50 epochs → 1250 total steps
 BATCH_SIZE: int = 16
 LEARNING_RATE: float = 5e-5
-NUM_EPOCHS: int = 30         # Giam tu 100 — voi 5600 train samples du de converge
-SAVE_STEPS: int = 100        # Save moi ~1 epoch (5600/16=350 steps/epoch, 100=~30%)
-EVAL_STEPS: int = 100
+NUM_EPOCHS: int = 30
+SAVE_STEPS: int = 150        # Save moi ~3 epochs (604/16=38 steps/epoch)
+EVAL_STEPS: int = 150        # Eval moi ~3 epochs — giam tu 100 de tiet kiem thoi gian
 MAX_TARGET_LENGTH: int = 12
 
 # Patience 10 — voi data nhieu, model converge nhanh hon

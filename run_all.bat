@@ -61,31 +61,23 @@ echo [OK] Buoc 1 hoan tat.
 
 echo.
 echo ============================================================
-echo BUOC 2/5: Generate TrOCR synthetic data (2K labeled samples)
-echo ============================================================
-powershell -Command "python generate_trocr_synthetic.py 2>&1 | Tee-Object -FilePath %LOGFILE% -Append"
-if errorlevel 1 goto error
-echo [OK] Buoc 2 hoan tat.
-
-echo.
-echo ============================================================
-echo BUOC 3/5: Train U-Net Denoiser (~10-15 phut)
+echo BUOC 2/4: Train U-Net Denoiser
 echo ============================================================
 powershell -Command "python train_unet.py 2>&1 | Tee-Object -FilePath %LOGFILE% -Append"
 if errorlevel 1 goto error
-echo [OK] Buoc 3 hoan tat. Model: captcha_unet_model.pth
+echo [OK] Buoc 2 hoan tat. Model: captcha_unet_model.pth
 
 echo.
 echo ============================================================
-echo BUOC 4/5: Train TrOCR Combine synthetic + %IMG_COUNT% real (~5-7 gio)
+echo BUOC 3/4: Train TrOCR (chi dung %IMG_COUNT% anh real, khong synthetic)
 echo ============================================================
-powershell -Command "python train.py --use-real-data --combine --augment 2>&1 | Tee-Object -FilePath %LOGFILE% -Append"
+powershell -Command "python train.py --use-real-data --augment 2>&1 | Tee-Object -FilePath %LOGFILE% -Append"
 if errorlevel 1 goto error
-echo [OK] Buoc 4 hoan tat. Model: captcha_trocr_model/
+echo [OK] Buoc 3 hoan tat. Model: captcha_trocr_model/
 
 echo.
 echo ============================================================
-echo BUOC 5/5: Evaluate model tren %IMG_COUNT% anh real
+echo BUOC 4/4: Evaluate model tren %IMG_COUNT% anh real
 echo ============================================================
 powershell -Command "python eval_model.py 2>&1 | Tee-Object -FilePath %LOGFILE% -Append"
 if errorlevel 1 goto error
