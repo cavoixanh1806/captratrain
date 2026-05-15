@@ -160,7 +160,7 @@ def train_one_epoch(
     all_labels: list[str] = []
 
     from tqdm import tqdm
-    pbar = tqdm(loader, leave=False, dynamic_ncols=True)
+    pbar = tqdm(loader, leave=False, dynamic_ncols=True, ascii=False)
     for step, batch in enumerate(pbar):
         images = batch["images"].to(device, non_blocking=True)
         labels = batch["labels"].to(device, non_blocking=True)
@@ -247,7 +247,7 @@ def validate(
     all_labels: list[str] = []
 
     from tqdm import tqdm
-    for batch in tqdm(loader, leave=False, dynamic_ncols=True):
+    for batch in tqdm(loader, leave=False, dynamic_ncols=True, ascii=False):
         images = batch["images"].to(device, non_blocking=True)
         labels = batch["labels"].to(device, non_blocking=True)
         label_lengths = batch["label_lengths"].to(device, non_blocking=True)
