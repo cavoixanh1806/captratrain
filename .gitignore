@@ -1,30 +1,39 @@
 # ── Môi trường ảo ─────────────────────────────────────────
 venv/
 
-# ── Model đã train (rất nặng ~500MB-1GB) ─────────────────
+# ── Model đã train (rất nặng ~50-500MB) ──────────────────
+captcha_crnn_model.pth
+captcha_crnn_last.pth
+captcha_crnn_model.onnx
+
+# Pipeline cũ (TrOCR) — giữ ignore để tránh accidentally commit
 captcha_trocr_model/
 captcha_trocr_model/**
-
-# ── Checkpoints trong quá trình train ─────────────────────
+captcha_unet_model.pth
 checkpoint-*/
 
 # ── Data synthetic (tự tạo lại được) ──────────────────────
 data/synthetic/
+data/synthetic_crnn/
 data/unet_pairs/
 data/real_backgrounds/
 data/preprocessed/
 data/sample_*.png
 data/_test_*.png
+data/_train_meta.csv
+data/_val_meta.csv
+data/_crnn_train.csv
+data/_crnn_val.csv
 
 # ── Dataset incoming (chỉ chứa ảnh chờ import) ────────────
 dataset/
 
-# ── Model U-Net (tự train lại được) ──────────────────────
-captcha_unet_model.pth
+# ── System info reports (phụ thuộc máy) ───────────────────
+system_info.md
+system_info.json
 
-# ── File tạm của dataset.py ───────────────────────────────
-data/_train_meta.csv
-data/_val_meta.csv
+# ── Reference repos cloned tạm ─────────────────────────────
+_ref_*/
 
 # ── Python cache ──────────────────────────────────────────
 __pycache__/
@@ -48,3 +57,4 @@ Desktop.ini
 # ── Logs ──────────────────────────────────────────────────
 *.log
 logs/
+train_log.txt

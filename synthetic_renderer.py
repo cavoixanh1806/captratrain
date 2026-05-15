@@ -1,20 +1,24 @@
 """
-generate_unet_data.py
-=====================
-Generate synthetic CAPTCHA pairs for U-Net denoiser training.
+synthetic_renderer.py
+======================
+Renderer chuyên dụng để sinh synthetic CAPTCHA giống real Minecraft Map.
 
-BG synthetic calibrated tu phan tich 754 anh real:
+Calibrated từ phân tích 754 ảnh real:
 - BGR avg (160, 157, 156), saturation ~10
 - 70% pure gray, 24% blue-tinted, 6% other
 - 31% flat, 33% mild gradient, 36% complex texture
+- 60% bold + 40% regular font, 12 font candidates
+- 96% gradient color cho text, char overlap 55% dense
 
-Pipeline:
-1. Generate BG synthetic giong real
-2. Render text len BG voi label biet truoc
-3. Save (noisy, mask) pair cho U-Net training
+Public API:
+    - random_text(length=5) → "ACDEF"
+    - render_text_on_image(text, size=128) → (bgr, mask)
+    - CAPTCHA_SIZE = 128
+    - CHARSET = "ACDEFHJKLMNPQRTUVWXY3479"
 
-Usage:
-    python generate_unet_data.py
+File này được dùng bởi:
+    - generate_synthetic_crnn.py — sinh data cho CRNN training
+    - (và có thể bất kỳ pipeline khác cần synthetic CAPTCHA)
 """
 
 import os
@@ -36,9 +40,6 @@ logger = logging.getLogger(__name__)
 # Loai: O/0, I/1, S/5, B/8, G/6, Z/2 (cac cap de nham)
 CHARSET: str = "ACDEFHJKLMNPQRTUVWXY3479"
 CAPTCHA_SIZE: int = 128
-TRAIN_COUNT: int = 10_000
-VAL_COUNT: int = 2_000
-OUTPUT_BASE: Path = Path("data/unet_pairs")
 
 # Font: mix bold + regular + serif — real data co NHIEU FONT trong 1 anh
 # Real CAPTCHA dung: Rockwell-like slab serif, sans-serif (Arial/Verdana),
@@ -567,47 +568,16 @@ def render_text_on_image(
     return noisy, mask_np
 
 
-def generate_dataset(output_dir: Path, count: int, split_name: str) -> None:
-    noisy_dir = output_dir / "noisy"
-    mask_dir = output_dir / "mask"
-
-    # Xoa data cu truoc khi generate moi — tranh tich luy file thua
-    import shutil
-    if noisy_dir.exists():
-        shutil.rmtree(noisy_dir)
-    if mask_dir.exists():
-        shutil.rmtree(mask_dir)
-
-    noisy_dir.mkdir(parents=True, exist_ok=True)
-    mask_dir.mkdir(parents=True, exist_ok=True)
-
-    logger.info(f"Generating {count} pairs for [{split_name}]...")
-
-    for i in range(count):
-        text = random_text()
-        noisy, mask = render_text_on_image(text, CAPTCHA_SIZE)
-
-        filename = f"unet_{i:05d}.png"
-        cv2.imwrite(str(noisy_dir / filename), noisy)
-        cv2.imwrite(str(mask_dir / filename), mask)
-
-        if (i + 1) % 2000 == 0:
-            logger.info(f"  [{split_name}] {i + 1}/{count} pairs done")
-
-    logger.info(f"  [{split_name}] Done: {count} pairs saved")
-
-
-def main() -> None:
-    train_dir = OUTPUT_BASE / "train"
-    val_dir = OUTPUT_BASE / "val"
-
-    generate_dataset(train_dir, TRAIN_COUNT, "train")
-    generate_dataset(val_dir, VAL_COUNT, "val")
-
-    logger.info(f"[DONE] U-Net training data saved to: {OUTPUT_BASE}")
-    logger.info(f"  Train: {TRAIN_COUNT} pairs")
-    logger.info(f"  Val:   {VAL_COUNT} pairs")
-
-
 if __name__ == "__main__":
-    main()
+    # Smoke test: render 5 sample CAPTCHAs to /tmp
+    import tempfile
+
+    out_dir = Path(tempfile.gettempdir()) / "captra_smoke"
+    out_dir.mkdir(exist_ok=True)
+    for i in range(5):
+        text = random_text()
+        bgr, mask = render_text_on_image(text, CAPTCHA_SIZE)
+        path = out_dir / f"sample_{i}_{text}.png"
+        cv2.imwrite(str(path), bgr)
+        print(f"  {path}  text={text}  shape={bgr.shape}")
+    print(f"Wrote 5 samples to {out_dir}")
