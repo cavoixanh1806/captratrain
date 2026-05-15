@@ -204,18 +204,6 @@ def train_one_epoch(
 
         total_loss += loss.item()
         n_batches += 1
-        
-        if step > 0 and step % log_interval == 0:
-            lr_now = optimizer.param_groups[0]['lr']
-            current_epoch = epoch_idx - 1 + (step / len(loader))
-            gn = grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm
-            log_dict = {
-                'loss': f"{loss.item():.4f}",
-                'grad_norm': f"{gn:.3f}",
-                'learning_rate': f"{lr_now:.3e}",
-                'epoch': f"{current_epoch:.2f}"
-            }
-            tqdm.write(str(log_dict).replace('"', "'"))
 
         # Decode every N steps để khỏi chậm — chỉ sample
         if step % log_interval == 0:
@@ -225,6 +213,18 @@ def train_one_epoch(
             all_labels.extend(texts[:8])
 
     avg_loss = total_loss / max(n_batches, 1)
+    
+    # HF style log at end of epoch
+    lr_now = optimizer.param_groups[0]['lr']
+    gn = grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm
+    log_dict = {
+        'loss': f"{avg_loss:.4f}",
+        'grad_norm': f"{gn:.3f}",
+        'learning_rate': f"{lr_now:.3e}",
+        'epoch': f"{epoch_idx}"
+    }
+    tqdm.write(str(log_dict).replace('"', "'"))
+    
     metrics = compute_metrics(all_preds, all_labels)
     return {
         "loss": avg_loss,
