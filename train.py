@@ -246,6 +246,7 @@ def main(
     combine: bool = False,
     preprocess_method: str | None = None,
     augment: bool = False,
+    resume: bool = False,
 ) -> None:
     """Hàm chính: load data, setup model và bắt đầu fine-tuning.
 
@@ -345,7 +346,15 @@ def main(
 
     # ── Bắt đầu Fine-tuning ───────────────────────────────────────────────────
     logger.info("🏋️  Bắt đầu fine-tuning...")
-    trainer.train()
+    # Resume from checkpoint neu co
+    from pathlib import Path
+    last_checkpoint = None
+    if resume:
+        checkpoints = sorted(Path(OUTPUT_DIR).glob("checkpoint-*"))
+        if checkpoints:
+            last_checkpoint = str(checkpoints[-1])
+            logger.info(f"Resuming from checkpoint: {last_checkpoint}")
+    trainer.train(resume_from_checkpoint=last_checkpoint)
 
     # ── Lưu Model và Processor ────────────────────────────────────────────────
     logger.info(f"[SAVE] Best model saved to: {OUTPUT_DIR}")
@@ -376,6 +385,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Enable data augmentation (rotation, brightness, blur, elastic)",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume training from last checkpoint",
+    )
     args = parser.parse_args()
 
     main(
@@ -383,4 +397,5 @@ if __name__ == "__main__":
         combine=args.combine,
         preprocess_method="unet",
         augment=args.augment,
+        resume=args.resume,
     )
