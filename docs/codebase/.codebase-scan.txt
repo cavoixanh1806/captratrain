@@ -1,0 +1,358 @@
+
+=== DIRECTORY TREE (max depth 3, source files only) ===
+.gitignore
+.kiro
+.kiro\skills
+.kiro\skills\acquire-codebase-knowledge
+.kiro\skills\acquire-codebase-knowledge\assets
+.kiro\skills\acquire-codebase-knowledge\references
+.kiro\skills\acquire-codebase-knowledge\scripts
+.kiro\skills\acquire-codebase-knowledge\SKILL.md
+captcha_crnn_last.pth
+CLAUDE.md
+CONTEXT.md
+crnn_model.py
+data
+data\map_00000.png
+data\map_00001.png
+data\map_00002.png
+data\map_00003.png
+data\map_00004.png
+data\map_00005.png
+data\map_00006.png
+data\map_00007.png
+data\map_00008.png
+data\map_00009.png
+data\map_00010.png
+data\map_00011.png
+data\map_00012.png
+data\map_00013.png
+data\map_00014.png
+data\map_00015.png
+data\map_00016.png
+data\map_00017.png
+data\map_00018.png
+data\map_00019.png
+data\map_00020.png
+data\map_00021.png
+data\map_00022.png
+data\map_00023.png
+data\map_00024.png
+data\map_00025.png
+data\map_00026.png
+data\map_00027.png
+data\map_00028.png
+data\map_00029.png
+data\map_00030.png
+data\map_00031.png
+data\map_00032.png
+data\map_00033.png
+data\map_00034.png
+data\map_00035.png
+data\map_00036.png
+data\map_00037.png
+data\map_00038.png
+data\map_00039.png
+data\map_00040.png
+data\map_00041.png
+data\map_00042.png
+data\map_00043.png
+data\map_00044.png
+data\map_00045.png
+data\map_00046.png
+data\map_00047.png
+data\map_00048.png
+data\map_00049.png
+data\map_00050.png
+data\map_00051.png
+data\map_00052.png
+data\map_00053.png
+data\map_00054.png
+data\map_00055.png
+data\map_00056.png
+data\map_00057.png
+data\map_00058.png
+data\map_00059.png
+data\map_00060.png
+data\map_00061.png
+data\map_00062.png
+data\map_00063.png
+data\map_00064.png
+data\map_00065.png
+data\map_00066.png
+data\map_00067.png
+data\map_00068.png
+data\map_00069.png
+data\map_00070.png
+data\map_00071.png
+data\map_00072.png
+data\map_00073.png
+data\map_00074.png
+data\map_00075.png
+data\map_00076.png
+data\map_00077.png
+data\map_00078.png
+data\map_00079.png
+data\map_00080.png
+data\map_00081.png
+data\map_00082.png
+data\map_00083.png
+data\map_00084.png
+data\map_00085.png
+data\map_00086.png
+data\map_00087.png
+data\map_00088.png
+data\map_00089.png
+data\map_00090.png
+data\map_00091.png
+data\map_00092.png
+data\map_00093.png
+data\map_00094.png
+data\map_00095.png
+data\map_00096.png
+data\map_00097.png
+data\map_00098.png
+data\map_00099.png
+data\map_00100.png
+data\map_00101.png
+data\map_00102.png
+data\map_00103.png
+data\map_00104.png
+data\map_00105.png
+data\map_00106.png
+data\map_00107.png
+data\map_00108.png
+data\map_00109.png
+data\map_00110.png
+data\map_00111.png
+data\map_00112.png
+data\map_00113.png
+data\map_00114.png
+data\map_00115.png
+data\map_00116.png
+data\map_00117.png
+data\map_00118.png
+data\map_00119.png
+data\map_00120.png
+data\map_00121.png
+data\map_00122.png
+data\map_00123.png
+data\map_00124.png
+data\map_00125.png
+data\map_00126.png
+data\map_00127.png
+data\map_00128.png
+data\map_00129.png
+data\map_00130.png
+data\map_00131.png
+data\map_00132.png
+data\map_00133.png
+data\map_00134.png
+data\map_00135.png
+data\map_00136.png
+data\map_00137.png
+data\map_00138.png
+data\map_00139.png
+data\map_00140.png
+data\map_00141.png
+data\map_00142.png
+data\map_00143.png
+data\map_00144.png
+data\map_00145.png
+data\map_00146.png
+data\map_00147.png
+data\map_00148.png
+data\map_00149.png
+data\map_00150.png
+data\map_00151.png
+data\map_00152.png
+data\map_00153.png
+data\map_00154.png
+data\map_00155.png
+data\map_00156.png
+data\map_00157.png
+data\map_00158.png
+data\map_00159.png
+data\map_00160.png
+data\map_00161.png
+data\map_00162.png
+data\map_00163.png
+data\map_00164.png
+data\map_00165.png
+data\map_00166.png
+data\map_00167.png
+data\map_00168.png
+data\map_00169.png
+data\map_00170.png
+data\map_00171.png
+data\map_00172.png
+data\map_00173.png
+data\map_00174.png
+data\map_00175.png
+data\map_00176.png
+data\map_00177.png
+data\map_00178.png
+data\map_00179.png
+data\map_00180.png
+data\map_00181.png
+data\map_00182.png
+data\map_00183.png
+data\map_00184.png
+data\map_00185.png
+data\map_00186.png
+
+=== STACK DETECTION (manifest files) ===
+
+--- requirements.txt ---
+# ============================================================
+# requirements.txt — CRNN+CTC CAPTCHA Solver
+# ============================================================
+# QUAN TRONG: PyTorch phai cai RIENG TRUOC (vi can chon CUDA hoac CPU)
+#
+# Buoc 1: Cai PyTorch (CHON 1 trong 2):
+#
+#   GPU NVIDIA (CUDA 12.8):
+#     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+#
+#   CPU only (khong co GPU):
+#     pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#
+# Buoc 2: Cai cac package con lai:
+#
+#   pip install -r requirements.txt
+# ============================================================
+
+# ── Deep Learning ───────────────────────────────────────────
+# (Cai rieng o Buoc 1, KHONG list o day vi pip se cai CPU version mac dinh)
+# torch>=2.4.0
+# torchvision>=0.19.0
+
+# ── Xu ly anh ───────────────────────────────────────────────
+opencv-python==4.9.0.80
+Pillow==10.3.0
+
+# ── Xu ly du lieu ───────────────────────────────────────────
+pandas==2.2.2
+numpy==1.26.4
+
+# ── Augmentation manh ───────────────────────────────────────
+# Neu khong co: tu fallback ve torchvision (nhe hon nhung kem manh)
+albumentations==1.4.3
+
+# ── ONNX export (deploy cho ddddocr hoac onnxruntime) ───────
+onnx>=1.15
+onnxruntime>=1.17
+
+# ── System info (cho system_info.py) ────────────────────────
+psutil>=5.9.0
+
+# ── Tien ich ────────────────────────────────────────────────
+tqdm==4.66.2
+
+
+=== ENTRY POINTS ===
+No common entry points found. Check 'main' or 'scripts.start' in manifest files above.
+
+=== LINTING AND FORMATTING CONFIG ===
+No linting or formatting config files found in project root.
+
+=== ENVIRONMENT VARIABLE TEMPLATES ===
+No .env.example or .env.template found. Identify required environment variables by searching the code and config for environment variable reads.
+
+=== TODO / FIXME / HACK (production code only, test dirs excluded) ===
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:28: TODO_LIMIT = 60
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:291: """Search for TODO/FIXME/HACK comments."""
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:291: """Search for TODO/FIXME/HACK comments."""
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:291: """Search for TODO/FIXME/HACK comments."""
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:293: patterns = ["TODO", "FIXME", "HACK"]
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:293: patterns = ["TODO", "FIXME", "HACK"]
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:293: patterns = ["TODO", "FIXME", "HACK"]
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:320: return todos[:TODO_LIMIT]
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:617: # TODOs
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:620: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", todos, output_file)
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:620: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", todos, output_file)
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:620: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", todos, output_file)
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:622: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", ["None found."], output_file)
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:622: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", ["None found."], output_file)
+.kiro\skills\acquire-codebase-knowledge\scripts\scan.py:622: print_section("TODO / FIXME / HACK (production code only, test dirs excluded)", ["None found."], output_file)
+
+=== GIT RECENT COMMITS (last 20) ===
+4190054 Optimize CRNN model to 2.18M params, increase epochs to 200, and improve data augmentation
+a62b460 Force unicode block characters in tqdm
+f0cdd5c Fix logging frequency bug for small datasets
+8089b13 Fix Windows Tee-Object encoding bug and update UI to HuggingFace format
+bf743f3 Replace TrOCR with CRNN+CTC pipeline (research-based, target 90%+)
+452e810 feat: them --resume flag de train tiep tu checkpoint
+1b4fd8d fix: min_length 5->7 (fix 4-char output), epochs 30->50
+52c3cbb perf: bo synthetic, chi train real 755 anh, eval_steps 150 giam thoi gian
+79161cb feat: Tee-Object - log VUA hien CMD VUA ghi file
+daf2a70 docs: fix comment 5K->2K samples
+3db0591 perf: giam epochs 100->30, synthetic 5K->2K (~6h thay vi 53h train)
+cd121f6 chore: don file thua, update README + run_all.bat (5 buoc, no extract BG)
+d2b7e4f chore: untrack dataset/ va sample files, gitignore them
+d9d8418 feat: BG synthetic calibrated tu 754 anh real (70%pure gray, 36%complex texture), xoa extract_real_backgrounds
+783dbf6 fix: bo real BG extraction (inpaint khong sach), dung synthetic BG thay the
+40ce771 fix: import_new_data skip anh da co (check label trung)
+26b35ba feat: run_all.bat xoa model cu, log file, dynamic data count, auto import dataset/
+e45ff89 feat: import 254 anh moi (500->754), generate_trocr_synthetic, combine workflow
+a4b698a fix: tang patience=20, epochs=100, max_length=12, min_length=5, beams=8 de model du tg hoc va sinh du 5 chars
+afc4450 fix: num_workers=0 on Windows (pickle error with nested fn)
+
+=== HIGH-CHURN FILES (last 90 days, top 20) ===
+  27 README.md
+  15 train.py
+  14 run_all.bat
+   9 inference.py
+   8 generate_unet_data.py
+   6 dataset.py
+   5 train_crnn.py
+   5 .gitignore
+   5 requirements.txt
+   5 generate_data.py
+   4 generate_trocr_synthetic.py
+   4 data/metadata.csv
+   3 PIPELINE_SUMMARY.md
+   3 preprocessing.py
+   3 train_unet.py
+   2 CLAUDE.md
+   2 CONTEXT.md
+   2 crnn_model.py
+   2 dataset_crnn.py
+   2 system_info.py
+
+=== MONOREPO SIGNALS ===
+No monorepo signals detected.
+
+=== CODE METRICS ===
+Total files scanned: 8029
+Total lines of code: 4536
+
+Files by language:
+  Other: 8017
+  Python: 12
+
+Top 10 largest files:
+captcha_crnn_last.pth: 25684.5KB
+train_log.txt: 263.8KB
+data\synthetic_crnn\captcha_001897.png: 38.0KB
+data\synthetic_crnn\captcha_004739.png: 37.9KB
+data\synthetic_crnn\captcha_000748.png: 37.9KB
+data\synthetic_crnn\captcha_002140.png: 37.9KB
+data\synthetic_crnn\captcha_002476.png: 37.8KB
+data\synthetic_crnn\captcha_002219.png: 37.8KB
+data\synthetic_crnn\captcha_002435.png: 37.8KB
+data\synthetic_crnn\captcha_004240.png: 37.8KB
+
+=== CI/CD PIPELINES ===
+No CI/CD pipelines detected.
+
+=== CONTAINERS & ORCHESTRATION ===
+No containerization configs detected.
+
+=== SECURITY & COMPLIANCE ===
+No security configs detected.
+
+=== PERFORMANCE & TESTING ===
+No performance testing configs detected.
+
+=== SCAN COMPLETE ===

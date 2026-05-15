@@ -14,7 +14,7 @@ CAPTCHA 128×128 RGB
   Resize 64×320 (ratio 1:5, kéo dãn ngang)
        │
        ▼
-  CRNN: CNN 7-block + BiLSTM(128) × 2  (~2.18M params)
+  CRNN: CNN 7-block + BiLSTM(128) × 2  (~2.18M params, count_parameters() == 2,186,553)
        │
        ▼
   Output (T=79, B, 25 classes: 24 chars + 1 CTC blank)
@@ -43,18 +43,19 @@ CAPTCHA 128×128 RGB
 
 | Tham số | Giá trị |
 |---|---|
-| Backbone | CNN 7 blocks + BiLSTM(256) × 2 |
-| Params | 2.18M |
+| Backbone | CNN 7 blocks + BiLSTM(128) × 2 (see crnn_model.CRNN default) |
+| Params | 2.18M (count_parameters() == 2,186,553) |
 | Loss | CTCLoss (blank=0, zero_infinity=True) |
 | Optimizer | AdamW (weight_decay=1e-4) |
-| LR | 1e-3 → linear warmup 200 → cosine → 1e-5 |
-| Epochs | 50 (full, không early stop) |
+| LR | 5e-4 (DEFAULT_LR) → linear warmup ≥ 2 epochs (max(WARMUP_STEPS, steps_per_epoch * 2)) → cosine → 1e-5 |
+| Epochs | 200 (see train_crnn.DEFAULT_EPOCHS; full, không early stop) |
 | Batch | 64 (16 cho CPU smoke) |
 | Input | 64×320 |
 | Augment | RandomAffine ±5°, ColorJitter, GaussNoise, Blur, CoarseDropout |
 | AMP | FP16 (CUDA only) |
 | Grad clip | 5.0 |
 | Val split | 15% real |
+| DataLoader workers | Auto: Windows `min(4, cpu_count // 2)`; Linux/macOS `min(8, cpu_count // 2)`; falls back to `0` trên torchvision path. Override `--num-workers`. Khi `> 0`: `persistent_workers=True`, `prefetch_factor=4`. |
 
 ## 📊 Logging
 

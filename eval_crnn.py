@@ -17,8 +17,10 @@ Usage:
 """
 
 import argparse
+import json
 import logging
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -38,11 +40,14 @@ def evaluate(
     metadata_path: str = "data/metadata.csv",
     image_dir: str = "data",
     batch_size: int = 64,
+    json_out: "str | Path | None" = None,
 ) -> dict:
     """Run evaluation.
 
     Returns:
-        Dict tóm tắt metrics.
+        Dict tóm tắt metrics. When ``json_out`` is provided, the same dict
+        (plus a ``confusion_matrix`` map and a ``low_confidence_wrongs``
+        list) is also written to that path as JSON.
     """
     metadata_path = Path(metadata_path)
     image_dir = Path(image_dir)
@@ -151,15 +156,45 @@ def evaluate(
     else:
         print(f"[FAIL] Exact match {exact_acc*100:.1f}% — review pipeline.")
 
-    return {
+    # ── Structured outputs (return + optional JSON dump) ─────────────────────
+    # 2-D confusion map: {true_char: {pred_char: count, ...}, ...}
+    confusion_matrix: dict[str, dict[str, int]] = {}
+    for pred, label in zip(preds, labels):
+        for i in range(min(len(pred), len(label), 5)):
+            t_char, p_char = label[i], pred[i]
+            if t_char != p_char:
+                confusion_matrix.setdefault(t_char, {})
+                confusion_matrix[t_char][p_char] = (
+                    confusion_matrix[t_char].get(p_char, 0) + 1
+                )
+
+    low_confidence_wrongs = [
+        {"file": fn, "true": l, "pred": p, "confidence": float(c)}
+        for fn, l, p, c in wrong_samples[:50]
+    ]
+
+    summary = {
         "total": len(labels),
         "exact_match": exact_acc,
         "cer": cer,
         "per_position": pos_acc,
         "confusions": dict(confusions.most_common(20)),
+        "confusion_matrix": confusion_matrix,
         "avg_confidence": avg_conf,
+        "low_confidence_wrongs": low_confidence_wrongs,
+        "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "checkpoint": str(checkpoint),
+        "metadata_path": str(metadata_path),
     }
 
+    if json_out is not None:
+        json_path = Path(json_out)
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        with json_path.open("w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+        logger.info(f"Eval JSON written: {json_path}")
+
+    return summary
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate CRNN on real CAPTCHA")
@@ -167,6 +202,13 @@ def main() -> None:
     parser.add_argument("--metadata", default="data/metadata.csv")
     parser.add_argument("--image-dir", default="data")
     parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument(
+        "--json-out", default=None,
+        help=(
+            "Optional path to dump the full evaluation summary as JSON "
+            "(includes confusion_matrix and low_confidence_wrongs)."
+        ),
+    )
     args = parser.parse_args()
 
     evaluate(
@@ -174,6 +216,7 @@ def main() -> None:
         metadata_path=args.metadata,
         image_dir=args.image_dir,
         batch_size=args.batch_size,
+        json_out=args.json_out,
     )
 
 

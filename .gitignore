@@ -58,3 +58,9 @@ Desktop.ini
 *.log
 logs/
 train_log.txt
+
+# ── Run archive (per-run artifact dump tu run_all.bat) ────
+runs/
+
+# ── One-off dev scripts ──────────────────────────────────
+_check_drift.py

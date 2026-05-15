@@ -6,20 +6,25 @@ mục tiêu **exact_match ≥ 90%**, **CER ≤ 10%**.
 Theo nghiên cứu trong [`research_minecraft_map_captcha_20260515.md`](research_minecraft_map_captcha_20260515.md):
 **CRNN+CTC** là kiến trúc SOTA classic cho fixed-charset captcha có ký tự
 chồng đè. Đây là replacement cho pipeline TrOCR cũ (đã loại bỏ vì
-sub-word tokenizer không phù hợp + 334M params overfit nặng với 754 ảnh).
+sub-word tokenizer không phù hợp + 334M params overfit nặng với dataset
+nhỏ).
 
 ```
 CAPTCHA 128×128 RGB
        │
        ▼
   ┌────────────────┐
-  │ Resize 64×320  │  (kéo dãn ngang 1:5, đủ T=79 timesteps cho 5 chars)
+  │ Resize 64×320  │  (kéo dãn ngang 1:5, đủ T=80 timesteps cho 5 chars)
   └────────┬───────┘
            ▼
-  ┌────────────────┐
-  │ CRNN backbone  │  CNN (7 blocks) + BiLSTM (2 layers, hidden=256)
-  │ ~2.18M params   │  Output: (T=79, B, 25)
-  └────────┬───────┘
+  ┌────────────────────────────────────────────────────────┐
+  │ CRNN backbone                                          │
+  │   CNN 7 blocks → (B, 256, h≈4, w=80)                    │
+  │   AdaptivePool + reshape → (T=80, B, 256)               │
+  │   BiLSTM 2 layers, hidden=128 → (T=80, B, 256)          │
+  │   Linear → (T=80, B, NUM_CLASSES=25)                    │
+  │   Canonical: count_parameters() == 2_186_553            │
+  └────────┬───────────────────────────────────────────────┘
            ▼
   ┌────────────────┐
   │ CTC decoder    │  Greedy: argmax → collapse repeats → drop blanks
@@ -27,11 +32,6 @@ CAPTCHA 128×128 RGB
            ▼
         "4KTN9"
 ```
-
-Aspect ratio 1:5 (height:width) tham khảo từ
-[abhishekkrthakur/captcha-recognition-pytorch](https://github.com/abhishekkrthakur/captcha-recognition-pytorch)
-(dùng 75×300, ratio 1:4) — kéo dãn ngang giúp CTC có nhiều timesteps hơn cho
-mỗi ký tự, alignment dễ học hơn.
 
 ## Charset (24 lớp + 1 blank cho CTC)
 
@@ -45,62 +45,150 @@ Loại các cặp dễ nhầm: `O/0`, `I/1`, `S/5`, `B/8`, `G/6`, `Z/2`.
 ## Yêu cầu hệ thống
 
 - Python 3.10+, RAM 8GB
-- GPU khuyến nghị: NVIDIA RTX 3060+ 8GB VRAM (CUDA 12.8+) — train ~30 phút
-- CPU only cũng chạy được — train ~3-4h
+- GPU khuyến nghị: NVIDIA RTX 3060+ 8GB VRAM (CUDA 12.8+) — train ~30-45 phút
+  cho 200 epoch trên ~500 ảnh real
+- CPU only cũng chạy được — train ~10-15 giờ (chỉ smoke test)
 
 ## Cài đặt
 
 ```bash
 git clone https://github.com/cavoixanh1806/captratrain.git
 cd captratrain
+setup.bat                       # tu dong tao venv + cai PyTorch CUDA 12.8 + requirements
+```
+
+Hoặc thủ công:
+```bash
 python -m venv venv
 venv\Scripts\activate
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
+pip install -r requirements-dev.txt    # cho ai cần chạy test
 ```
 
-## Chạy toàn bộ bằng 1 lệnh
+## Chạy 1 lệnh
 
 ```bash
-venv\Scripts\activate
-run_all.bat
+run_all.bat                          REM clean train, default 200 epochs
+run_all.bat --epochs 100             REM override epoch budget
+run_all.bat --batch-size 64          REM override batch size
+run_all.bat --num-workers 4          REM override DataLoader workers (auto neu khong truyen)
+run_all.bat --resume                 REM tiep tuc tu captcha_crnn_last.pth
+run_all.bat --resume --epochs 50     REM resume + chinh epoch budget
 ```
 
-Script tự động:
-- Import ảnh mới từ `dataset/` nếu có (idempotent, check label trùng)
-- Xóa model cũ
-- Sinh 50K synthetic CAPTCHA (calibrated từ 754 ảnh real)
-- Train CRNN+CTC trên 50K synthetic + ~640 real (val 15%)
-- Eval trên 754 real, in metrics + verdict
-- Export ONNX để deploy
+Workflow tự động:
+1. Import ảnh mới từ `dataset/` (idempotent, check label trùng).
+2. Clean cũ (chỉ khi không có `--resume`).
+3. Train CRNN+CTC trên `data/metadata.csv` (val 15% real, augment ON).
+4. Eval trên toàn bộ real, in verdict.
+5. Archive artifact vào `runs\run_<TS>\`.
 
-Log toàn bộ ra `train_log.txt`.
+Tất cả flag không liên quan tới `--resume` được forward thẳng xuống
+`train_crnn.py` (xem `train_crnn.py --help` để biết thêm).
 
-## Workflow (tối giản — verify trước, scale up sau)
+## Output sau khi chạy xong
+
+### Tại repo root (`inference_crnn.py` / `eval_crnn.py` / Solver tìm tới đây)
+- `captcha_crnn_model.pth` — best model (theo `val_exact_match`)
+- `captcha_crnn_last.pth` — checkpoint epoch cuối, dùng cho `--resume`
+- `captcha_crnn_model.onnx` — best model export ONNX (opset 14, dynamic batch)
+- `train_log.txt` — log đầy đủ của lần chạy gần nhất
+
+### Tại thư mục archive `runs\run_<YYYYMMDD_HHMMSS>\`
+Mỗi lần chạy `run_all.bat` tạo một thư mục mới — không đè lên lần trước.
+
+| File | Mô tả |
+|---|---|
+| `train_log.txt` | Log đầy đủ + verdict eval (text) |
+| `metrics.csv` | Per-epoch table — đọc bằng pandas/Excel để vẽ chart |
+| `eval_summary.json` | Eval kết quả structured: confusion matrix, low-confidence wrongs, ... |
+| `captcha_crnn_model.pth` | Snapshot best model |
+| `captcha_crnn_last.pth` | Snapshot last (cho resume sau này) |
+| `captcha_crnn_model.onnx` | Snapshot ONNX |
+
+`metrics.csv` columns: `epoch, timestamp, train_loss, train_grad_norm,
+learning_rate, eval_loss, eval_cer, eval_exact_match, eval_runtime_s,
+gap, is_best, best_val_em, best_epoch`.
+
+`eval_summary.json` keys: `total, exact_match, cer, per_position,
+confusions, confusion_matrix, avg_confidence, low_confidence_wrongs,
+timestamp, checkpoint, metadata_path`.
+
+`runs/` đã có trong `.gitignore` — không lo accidentally commit model nặng.
+
+### Đọc metrics CSV trong Python
+```python
+import pandas as pd
+df = pd.read_csv("runs/run_20260516_223000/metrics.csv")
+df.plot(x="epoch", y=["train_loss", "eval_loss", "eval_exact_match"])
+```
+
+### Đọc confusion matrix JSON
+```python
+import json, pandas as pd, seaborn as sns
+data = json.load(open("runs/run_20260516_223000/eval_summary.json"))
+cm = pd.DataFrame(data["confusion_matrix"]).fillna(0).astype(int)
+sns.heatmap(cm, annot=True, fmt="d")
+```
+
+## Đọc output khi train
+
+Log được format kiểu Hugging Face Trainer (qua `tqdm.write` + `print`):
 
 ```
-754 real images (data/) + import mới từ dataset/
-       │
-       ▼
-[1] Train CRNN+CTC trên 754 real (val 15% real)
-       │   - 200 epochs, train hết (KHÔNG early stop)
-       │   - AdamW lr=1e-3, warmup 200 steps + cosine decay
-       │   - AMP fp16, batch=64
-       │   - Augmentation đầy đủ (Affine, ColorJitter, Noise, Blur, Cutout)
-       ▼
-[2] Eval trên 754 real → in exact_match, CER, confusions, verdict
-       ▼
-   captcha_crnn_model.pth + captcha_crnn_model.onnx
+{'loss': '3.5138', 'grad_norm': '12.345', 'learning_rate': '5.000e-04', 'epoch': '10'}
+{'eval_loss': '3.426', 'eval_cer': '0.945', 'eval_exact_match': '0.000', 'eval_runtime': '1.23', 'eval_samples_per_second': '91.870', 'eval_steps_per_second': '3.252', 'epoch': '10'}
 ```
 
-**Tạm thời KHÔNG dùng** (giữ code, kích hoạt khi cần):
-- Synthetic data — chạy `python generate_synthetic_crnn.py` rồi `python train_crnn.py --use-synthetic`
-- Self-training — chạy `python self_train.py` sau khi xong round 1
-- EMA weights — đã bỏ khỏi `train_crnn.py`
-- EarlyStopping — đã bỏ, train hết epochs
+- `loss` / `eval_loss` — CTC loss (càng thấp càng tốt)
+- `eval_exact_match` — % captcha decode đúng cả 5/5 ký tự (metric chính)
+- `eval_cer` — character error rate (0 = perfect, 1 = sai hết)
+- `grad_norm` — norm gradient sau clip
+- `learning_rate` — LR hiện tại sau scheduler step
+- `eval_samples_per_second` / `eval_steps_per_second` — throughput
 
-Mục tiêu pipeline tối giản: **verify code chạy đúng + đo baseline** trước khi
-áp dụng các kỹ thuật advanced.
+Khi best model được save:
+```
+2026-05-15 23:15:12 [INFO]   → Best model saved (val_exact_match=0.3540, val_cer=0.142)
+```
+
+Cuối training:
+```
+2026-05-15 23:38:00 [INFO] [DONE] Best val_exact_match=0.4071 at epoch 178
+2026-05-15 23:38:00 [INFO]   Checkpoint: captcha_crnn_model.pth
+2026-05-15 23:38:01 [INFO]   ONNX exported: captcha_crnn_model.onnx
+```
+
+### Eval verdict format
+
+```
+================================================================
+CRNN EVALUATION RESULTS
+================================================================
+Total samples:       500
+Exact match correct: 178
+Exact match acc:      35.60%
+CER:                  14.32%
+Avg confidence:       62.40%
+
+Per-position accuracy:
+  Position 1:  92.40%  ████████████████████████████
+  Position 2:  88.20%  ██████████████████████████
+  Position 3:  79.60%  ███████████████████████
+  ...
+
+Top 10 confusions (322 total mistakes):
+  3 → 7: 12
+  K → X: 9
+  Y → V: 7
+  ...
+
+================================================================
+VERDICT
+================================================================
+[GOOD] Exact match 35.60% — close to target, fine-tune more.
+```
 
 ## Thêm data mới
 
@@ -116,31 +204,31 @@ Khi chạy `run_all.bat`, script tự import vào `data/` + cập nhật
 ```bash
 venv\Scripts\activate
 
-# Gán nhãn (nếu chưa có metadata.csv) — Web UI tại localhost:8080
+# Gan nhan (neu chua co metadata.csv) — Web UI tai localhost:8080
 python label_server.py
 
-# Import data mới từ dataset/
+# Import data moi tu dataset/
 python import_new_data.py
 
-# Sinh 100K synthetic (mặc định)
+# Train CRNN — co the truyen tat ca cac flag
+python train_crnn.py
+python train_crnn.py --epochs 50 --batch-size 64
+python train_crnn.py --resume
+python train_crnn.py --num-workers 4 --metrics-csv runs\my_run\metrics.csv
+
+# Sinh synthetic data (mac dinh 100K) — KHONG bat boi default workflow
 python generate_synthetic_crnn.py
-# Hoặc sinh 50K (nhanh hơn, ít RAM)
 python generate_synthetic_crnn.py --count 50000
 
-# Train CRNN round 1
-python train_crnn.py
-# Custom: 80 epochs, batch 32
-python train_crnn.py --epochs 80 --batch-size 32
-# Resume từ checkpoint
-python train_crnn.py --resume
+# Train co synthetic
+python train_crnn.py --use-synthetic
 
-# Self-training round 2 (chạy SAU round 1, dùng cùng checkpoint)
+# Self-training round 2 (chay sau khi co round 1 tot)
 python self_train.py
-# Custom: confidence threshold 0.92, 20 epochs
-python self_train.py --confidence 0.92 --epochs 20
 
-# Evaluate
+# Eval — co the dump JSON
 python eval_crnn.py
+python eval_crnn.py --batch-size 128 --json-out runs\my_run\eval_summary.json
 ```
 
 ## Inference
@@ -152,7 +240,7 @@ solver = CRNNCaptchaSolver()
 text = solver.solve("path/to/captcha.png")
 print(text)  # "4KTN9"
 
-# Với confidence
+# Voi confidence
 text, conf = solver.solve_with_confidence("path/to/captcha.png")
 print(f"{text} ({conf:.2%})")
 
@@ -166,8 +254,6 @@ python inference_crnn.py data/map_00001.png
 
 ### Deploy với ONNX runtime
 
-Sau khi train xong, có file `captcha_crnn_model.onnx` để deploy nhanh:
-
 ```python
 import onnxruntime as ort
 import numpy as np
@@ -177,85 +263,33 @@ session = ort.InferenceSession("captcha_crnn_model.onnx")
 img = cv2.imread("captcha.png")
 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 img = cv2.resize(img, (320, 64)).astype(np.float32) / 255.0
-# Normalize ImageNet
 img = (img - [0.485, 0.456, 0.406]) / [0.229, 0.224, 0.225]
-img = np.transpose(img, (2, 0, 1))[None]  # (1, 3, 64, 320)
+img = np.transpose(img, (2, 0, 1))[None]                       # (1, 3, 64, 320)
 logits = session.run(None, {"input": img.astype(np.float32)})[0]
 # CTC decode: argmax + collapse + drop blank
-# (xem inference_crnn.decode_greedy để biết logic)
+# (xem inference_crnn.decode_greedy de biet logic)
 ```
 
-## Synthetic generator (calibrated)
+## Cấu hình hyperparams (canonical, source of truth)
 
-Background sinh giống real CAPTCHA (phân tích từ 754 ảnh thật):
-- BGR avg `(160, 157, 156)` — gần pure gray
-- Saturation rất thấp (avg 10)
-- 70% pure gray, 24% blue-tinted, 6% other
-- 31% flat, 33% mild gradient, 36% complex texture
-- Char overlap: 55% dense merge, 25% medium, 20% light
-- Rotation: 65% trong [-5°, 5°], 21% [-15°, 15°], 11% [-30°, 30°]
-- 60% bold + 40% regular font, 12 font candidates (Arial, Verdana, Georgia,
-  Times, Palatino, Courier, etc.)
-- 96% gradient color cho từng ký tự (multi-tone)
+| Tham số | Giá trị | Nơi định nghĩa |
+|---|---|---|
+| Backbone | CNN 7 blocks + BiLSTM 2-layer (hidden=128) | `crnn_model.CRNN.__init__` |
+| Params | 2,186,553 | `CRNN().count_parameters()` |
+| Loss | CTCLoss (blank=0, zero_infinity=True) | `train_crnn.main` |
+| Optimizer | AdamW (weight_decay=1e-4) | `train_crnn.main` |
+| Default LR | 5e-4 | `train_crnn.DEFAULT_LR` |
+| LR schedule | Linear warmup ≥ 2 epochs (`max(WARMUP_STEPS, steps_per_epoch * 2)`) → cosine decay → `lr × 0.01` | `train_crnn.build_warmup_cosine_scheduler` |
+| Default epochs | 200 | `train_crnn.DEFAULT_EPOCHS` |
+| Default batch | 32 | `train_crnn.DEFAULT_BATCH_SIZE` |
+| Input size | 64×320 (resize từ 128×128, ratio 1:5) | `crnn_model.INPUT_HEIGHT/WIDTH` |
+| Augment | Albumentations toned-down: Affine ±4°, Perspective 0.01–0.04, ColorJitter mild, GaussNoise 3–12, OneOf(GaussianBlur/MotionBlur), CoarseDropout 2 holes 5×5 | `dataset_crnn._build_albu_aug(strong=True)` |
+| Mixed precision | FP16 (CUDA only) | `train_crnn.main` |
+| Gradient clip | 5.0 | `train_crnn.GRAD_CLIP_NORM` |
+| Val split | 15% real, `seed=42` | `dataset_crnn.create_crnn_datasets` |
+| DataLoader workers | Auto: Windows `min(4, cpu_count // 2)`; Linux/macOS `min(8, cpu_count // 2)`; falls back to `0` on torchvision path. Override with `--num-workers`. Khi `> 0`: `persistent_workers=True`, `prefetch_factor=4` | `train_crnn._auto_num_workers` |
 
-## Đọc output khi train
-
-Output đã được format lại giống y hệt chuẩn của **Hugging Face Trainer**, với thanh tiến trình `tqdm` và log dưới dạng Dictionary:
-
-```
- 20%|█████████▏                                    | 10/50 [00:15<00:45,  1.50s/it]
-{'loss': '0.2998', 'grad_norm': '14.620', 'learning_rate': '4.465e-05', 'epoch': '9.50'}
-{'eval_loss': '1.799', 'eval_cer': '0.348', 'eval_exact_match': '0.130', 'eval_runtime': '42.19', 'eval_samples_per_second': '2.37', 'eval_steps_per_second': '0.166', 'epoch': '9'}
-```
-
-- `loss` / `eval_loss`: CTC loss (càng thấp càng tốt)
-- `eval_exact_match`: Tỷ lệ % ảnh đoán đúng hoàn toàn 5/5 ký tự
-- `eval_cer`: Character error rate (tỷ lệ lỗi từng ký tự, càng thấp càng tốt)
-- Thanh tiến trình sẽ tự động ghi đè trên CMD (`\r`) để không làm trôi dòng, giúp bạn theo dõi quá trình mượt mà.
-
-### Eval verdict
-
-```
-Total samples:       754
-Exact match correct: 712
-Exact match acc:      94.43%
-CER:                   2.17%
-Avg confidence:       95.89%
-
-Per-position accuracy:
-  Position 1:  96.42%  ████████████████████████████
-  Position 2:  95.10%  ████████████████████████████
-  ...
-
-Top 10 confusions:
-  C → Q: 4
-  K → W: 3
-  ...
-
-[EXCELLENT] Exact match 94.4% ≥ 90% — ACHIEVED TARGET
-```
-
-## Cấu hình hyperparams
-
-| Tham số | Giá trị |
-|---|---|
-| Backbone | CNN 7 blocks + BiLSTM 2-layer (hidden=256) |
-| Params | ~2.18M |
-| Loss | CTCLoss (blank=0, zero_infinity=True) |
-| Optimizer | AdamW (weight_decay=1e-4) |
-| LR | 1e-3 → linear warmup 200 steps → cosine decay → 1e-5 |
-| Epochs | 50 (train hết, KHÔNG early stop) |
-| Batch | 64 |
-| Input size | 64×320 (resize từ 128×128, ratio 1:5) |
-| Augment | RandomAffine, ColorJitter, GaussNoise, Blur, CoarseDropout |
-| Mixed precision | FP16 (CUDA) |
-| Gradient clip | 5.0 |
-| Val split | 15% real |
-
-**Data train**: 754 × 0.85 = ~640 real samples
-**Val (real)**: ~114 ảnh (754×0.15)
-
-**Thời gian ước tính:**
+**Thời gian ước tính (200 epoch, ~500 ảnh real):**
 
 | Hardware | Thời gian | Verdict |
 |---|---|---|
@@ -265,9 +299,9 @@ Top 10 confusions:
 
 > Chạy `python system_info.py` để check máy bạn được verdict gì.
 
-## Tăng accuracy nếu < 90% (theo thứ tự đề xuất)
+## Tăng accuracy nếu < 90%
 
-Pipeline mặc định (chỉ real, không synthetic, không self-train) là **baseline tối giản** để verify. Nếu accuracy < 90%, bật từng kỹ thuật theo thứ tự:
+Pipeline mặc định (chỉ real, không synthetic, không self-train) là **baseline tối giản**. Nếu accuracy < 90%, bật từng kỹ thuật theo thứ tự đề xuất:
 
 1. **Bật synthetic data** (khả năng cải thiện cao nhất):
    ```bash
@@ -284,7 +318,7 @@ Pipeline mặc định (chỉ real, không synthetic, không self-train) là **b
 
 3. **Train lâu hơn**:
    ```bash
-   python train_crnn.py --epochs 100
+   python train_crnn.py --epochs 400
    ```
 
 4. **Tăng synthetic count** lên 200K:
@@ -292,77 +326,61 @@ Pipeline mặc định (chỉ real, không synthetic, không self-train) là **b
    python generate_synthetic_crnn.py --count 200000
    ```
 
-5. **Calibrate `synthetic_renderer.py`** — match exact font/color/overlap với real
-   (nếu domain gap synthetic vs real quá lớn).
+5. **Calibrate `synthetic_renderer.py`** — match font/color/overlap với real
+   nếu domain gap synthetic vs real quá lớn.
 
-## So sánh với repo tham khảo abhishekkrthakur/captcha-recognition-pytorch
+## Testing (dev)
 
-Pipeline này tham khảo **idea** từ
-[abhishekkrthakur/captcha-recognition-pytorch](https://github.com/abhishekkrthakur/captcha-recognition-pytorch)
-nhưng nâng cấp toàn diện. Các thay đổi đều **TĂNG accuracy**, không có thay
-đổi nào giảm:
+Spec [`crnn-ctc-collapse-fix`](.kiro/specs/crnn-ctc-collapse-fix/) đi kèm
+2 bộ property test:
 
-| Yếu tố | Repo gốc (tutorial 200 dòng) | Pipeline này | Tác động |
-|---|---|---|---|
-| Architecture | 2 conv + Linear + GRU(32) | 7 conv + AdaptivePool + LSTM(256) | +40% (model 100× lớn hơn) |
-| Params | ~80K | 2.18M | Đủ học charset 24 + noise |
-| Input | 75×300 | 64×320 | T=79 timesteps, +6% so với 74 |
-| CTC decode | `remove_duplicates` (sai chuẩn) | `decode_greedy` chuẩn | +5-10% không lẫn ký tự |
-| Optimizer | Adam + ReduceLROnPlateau | AdamW + warmup + cosine | Stability +1-2% |
-| Augmentation | Chỉ Normalize | Affine + ColorJitter + Noise + Blur + CoarseDropout | +5-10% robust |
-| Mixed precision | Không | FP16 AMP | 2× nhanh, accuracy giống |
-| EMA | Không | Decay 0.999 | +1-2% stable |
-| EarlyStopping | Không | Patience 10 | Tránh overfit |
-| Self-training | Không | **Có (Phase 4)** | **+5-10%** |
-| Synthetic data | Không (chỉ ảnh thật) | 100K calibrated | **+30-50%** |
-| ONNX export | Không | Có | Deploy nhanh |
-| Eval metric | accuracy_score (sai cho ký tự lặp) | exact_match + CER + per-position | Đo đúng |
+- `tests/test_property1_bug_condition.py` — Property 1: post-fix model
+  generalises to real val + GPU ≥ 80% util. Smoke (20 epoch) + full
+  (200 epoch, `-m slow`) + GPU util sub-tests gate trên hardware target.
+  Helper checks: replay log + doc-drift grep.
+- `tests/test_property2_preservation.py` — Property 2: 10 invariants không
+  được đổi (charset, input shape, ONNX contract, resume flow, decode
+  semantics, split determinism, Solver API, ...).
 
-**Kết quả kỳ vọng**:
-- Repo gốc trên dataset chuẩn: ~85-90% sau 200 epochs
-- Pipeline này trên Minecraft CAPTCHA (phức tạp hơn): **88-94% sau 200 epochs round 1, 90-95% sau self-train round 2**
+```bash
+venv\Scripts\python.exe -m pytest tests\ -v -m "not slow"     # quick
+venv\Scripts\python.exe -m pytest tests\ -v -m slow            # full 200-epoch (chi chay tren RTX 3060)
+```
+
+Hardware-gated tests skip cleanly trên CPU host với reason rõ ràng.
 
 ## Cấu trúc project
 
 ```
 captratrain/
-├── data/                       # 754 real ảnh + metadata.csv
-├── dataset/                    # Nơi đặt ảnh mới chờ import
-├── crnn_model.py               # CRNN architecture + CTC encode/decode
-├── dataset_crnn.py             # CRNNCaptchaDataset + augmentation
-├── synthetic_renderer.py       # render_text_on_image (calibrated)
-├── generate_synthetic_crnn.py  # Sinh synthetic data (default 100K)
-├── train_crnn.py               # Train CTC round 1 + EMA + warmup-cosine
-├── self_train.py               # Self-training round 2 (Phase 4)
-├── inference_crnn.py           # CRNNCaptchaSolver (CLI + lib)
-├── eval_crnn.py                # Evaluation suite
-├── import_new_data.py          # Import ảnh mới từ dataset/
-├── label_server.py             # Web UI gán nhãn
-├── system_info.py              # Kiểm tra cấu hình máy + đánh giá train
-├── run_all.bat                 # 4-phase workflow
-├── requirements.txt            # Dependencies
-└── train_log.txt               # Log file (auto generated)
+├── data/                           # ~500 real images + metadata.csv
+├── dataset/                        # Inbox cho ảnh mới chờ import
+├── runs/                           # Per-run archives (gitignored)
+├── docs/
+│   ├── adr/0001-crnn-ctc-over-softmax.md
+│   ├── codebase/                   # ARCHITECTURE, CONCERNS, STACK, ...
+│   └── research_strategy_20260515.md
+├── tests/                          # Property 1 + Property 2 test suites
+├── .kiro/                          # Spec + skills (Kiro workflow files)
+├── crnn_model.py                   # CRNN architecture + CTC encode/decode
+├── dataset_crnn.py                 # CRNNCaptchaDataset + augmentation
+├── synthetic_renderer.py           # render_text_on_image (calibrated)
+├── generate_synthetic_crnn.py      # Sinh synthetic data (default 100K)
+├── train_crnn.py                   # Train CTC + warmup-cosine + metrics CSV
+├── self_train.py                   # Self-training round 2
+├── inference_crnn.py               # CRNNCaptchaSolver (CLI + lib)
+├── eval_crnn.py                    # Evaluation suite + JSON dump
+├── import_new_data.py              # Import ảnh mới từ dataset/
+├── label_server.py                 # Web UI gán nhãn
+├── system_info.py                  # Kiểm tra cấu hình máy
+├── run_all.bat                     # Pipeline runner (resume-aware, archives)
+├── run_smoke.bat                   # Smoke test (5 epochs, batch 16)
+├── setup.bat                       # Auto setup venv + PyTorch + deps
+├── pytest.ini
+├── requirements.txt                # Production dependencies
+├── requirements-dev.txt            # pytest + hypothesis cho dev
+└── train_log.txt                   # Log lan chay gan nhat (root mirror)
 ```
-
-## Kiểm tra cấu hình máy trước khi train
-
-```bash
-# In ra console (mặc định MD)
-python system_info.py
-
-# Ghi file MD
-python system_info.py -o system_info.md
-
-# Ghi file JSON
-python system_info.py -f json -o system_info.json
-```
-
-Tool sẽ in:
-- OS, CPU (model, cores, threads), RAM (total/available), Disk (free)
-- GPU (NVIDIA qua nvidia-smi, integrated qua WMI)
-- Python version + PyTorch CUDA support
-- Verdict: `READY` / `MARGINAL` / `CPU_ONLY` / `NOT_RECOMMENDED`
-- Ước tính thời gian train + recommended action
 
 ## Cập nhật code
 

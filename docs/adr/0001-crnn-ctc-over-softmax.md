@@ -15,9 +15,24 @@ Có 2 approach chính:
 
 ## Decision
 Chọn **CRNN+CTC** với architecture:
-- CNN backbone (7 blocks) + BiLSTM (2 layers, hidden=256)
+- CNN backbone (7 blocks) + BiLSTM (2 layers, hidden=128 (see `crnn_model.CRNN` default))
 - CTC loss + greedy decode
 - Input resize 64×320 (aspect ratio 1:5)
+
+## Implementation note (2026-05-15)
+
+Bản draft ban đầu của ADR này quote `hidden_size = 2 * 128` (i.e. quoted
+the bidirectional output width — `2 * hidden`), nhưng cấu hình canonical
+thực tế đang chạy trong `crnn_model.CRNN.__init__` là `hidden_size=128`
+per direction (không phải gấp đôi). Param count đã được verify bằng
+`CRNN().count_parameters() == 2,186,553` và khớp với
+`train_log.txt` (`CRNN params: 2,186,553`). FC layer cuối là
+`Linear(2 * hidden_size, num_classes) = Linear(2*128, 25)` — con số
+`2 * hidden = 2 * 128` (bidirectional width) trong các phiên bản trước
+của doc đã bị nhầm với `hidden_size` per direction. Doc table trong
+`README.md` / `PIPELINE_SUMMARY.md` / `CLAUDE.md` đã được sync về cùng
+nguồn sự thật trong `crnn_model.CRNN.__init__` và
+`train_crnn.DEFAULT_EPOCHS = 200`.
 
 ## Consequences
 

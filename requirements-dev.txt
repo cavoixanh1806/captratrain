@@ -1,0 +1,9 @@
+# Dev-only dependencies for the test suite (Property 1 / Property 2 PBT tests).
+# Install on top of the runtime requirements (requirements.txt + torch from
+# the pytorch index) with:
+#   pip install -r requirements-dev.txt
+#
+# These are NOT shipped to production — they live behind `pytest` only.
+
+pytest>=8.0
+hypothesis>=6.100

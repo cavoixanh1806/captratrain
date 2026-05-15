@@ -12,8 +12,8 @@ Tạm thời KHÔNG dùng:
 Pipeline hiện tại:
     1. Load CRNN (~2.18M params)
     2. Loss: CTCLoss + zero_infinity=True
-    3. Optimizer: AdamW lr=1e-3, weight_decay=1e-4
-    4. LR schedule: linear warmup 200 steps → cosine decay (per-batch step)
+    3. Optimizer: AdamW lr=5e-4 (DEFAULT_LR), weight_decay=1e-4
+    4. LR schedule: linear warmup (>=2 epochs, floor WARMUP_STEPS=200) → cosine decay (per-batch step)
     5. Mixed-precision (fp16 autocast) trên CUDA
     6. Train trên real data (754 ảnh × 0.85), eval trên val (754 × 0.15)
     7. Augmentation theo research doc: Affine + ColorJitter + Noise + Blur + Cutout
@@ -28,9 +28,12 @@ Usage:
 """
 
 import argparse
+import csv
 import logging
 import math
+import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
@@ -66,9 +69,45 @@ LAST_CHECKPOINT_PATH: str = "captcha_crnn_last.pth"
 
 DEFAULT_EPOCHS: int = 200
 DEFAULT_BATCH_SIZE: int = 32
-DEFAULT_LR: float = 1e-3
+DEFAULT_LR: float = 5e-4
 WARMUP_STEPS: int = 200
 GRAD_CLIP_NORM: float = 5.0
+
+
+# ─── DataLoader worker auto-policy ───────────────────────────────────────────
+
+
+def _auto_num_workers() -> int:
+    """Choose a sensible default ``num_workers`` for the host.
+
+    Policy (crnn-ctc-collapse-fix design §B item 3):
+
+    - Windows (``os.name == "nt"``):
+        * If albumentations imports cleanly, use ``min(4, cpu_count // 2)``.
+          ``_TRAIN_AUG`` is a module-level ``albumentations.Compose`` and is
+          pickleable under the spawn start method (verified with
+          albumentations 1.4.3).
+        * If albumentations import fails (torchvision fallback path), drop
+          to ``0`` to avoid pickling the torchvision ``Compose`` across
+          spawn workers.
+    - Linux/macOS: ``min(8, cpu_count // 2)``.
+
+    Returns 0 whenever ``cpu_count`` is unavailable or computes to <= 0,
+    so the DataLoader keeps the main-thread fallback that has always
+    worked.
+    """
+    cpu_count = os.cpu_count() or 0
+    if cpu_count <= 1:
+        return 0
+
+    if os.name == "nt":
+        try:
+            import albumentations  # noqa: F401  (probe only)
+        except Exception:
+            return 0
+        return max(0, min(4, cpu_count // 2))
+
+    return max(0, min(8, cpu_count // 2))
 
 
 # ─── Scheduler ───────────────────────────────────────────────────────────────
@@ -228,8 +267,65 @@ def train_one_epoch(
     metrics = compute_metrics(all_preds, all_labels)
     return {
         "loss": avg_loss,
+        "grad_norm": float(gn),
+        "learning_rate": float(lr_now),
         **{f"train_{k}": v for k, v in metrics.items()},
     }
+
+
+# ─── Metrics CSV writer ──────────────────────────────────────────────────────
+
+
+METRICS_CSV_FIELDS: tuple[str, ...] = (
+    "epoch",
+    "timestamp",
+    "train_loss",
+    "train_grad_norm",
+    "learning_rate",
+    "eval_loss",
+    "eval_cer",
+    "eval_exact_match",
+    "eval_runtime_s",
+    "gap",
+    "is_best",
+    "best_val_em",
+    "best_epoch",
+)
+
+
+def _open_metrics_csv(path: Path, resume: bool) -> "tuple[object, csv.DictWriter] | tuple[None, None]":
+    """Open metrics CSV file for appending, creating header if missing.
+
+    When ``resume=True`` and the file already exists, append without header.
+    Otherwise truncate and write a fresh header.
+    """
+    if path is None:
+        return None, None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not (resume and path.exists() and path.stat().st_size > 0)
+    mode = "a" if resume and path.exists() else "w"
+    f = path.open(mode, newline="", encoding="utf-8")
+    writer = csv.DictWriter(f, fieldnames=METRICS_CSV_FIELDS)
+    if write_header:
+        writer.writeheader()
+        f.flush()
+    return f, writer
+
+
+def _append_metrics_row(
+    writer: "csv.DictWriter | None",
+    f: "object | None",
+    row: dict,
+) -> None:
+    if writer is None or f is None:
+        return
+    # Ensure all keys are present, fill missing with empty string.
+    safe_row = {k: row.get(k, "") for k in METRICS_CSV_FIELDS}
+    writer.writerow(safe_row)
+    try:
+        f.flush()
+    except Exception:
+        pass
 
 
 @torch.no_grad()
@@ -287,6 +383,9 @@ def main(
     use_real: bool = True,
     augment: bool = True,
     resume: bool = False,
+    *,
+    num_workers: int | None = None,
+    metrics_csv: "str | os.PathLike | None" = None,
 ) -> None:
     """Main training loop."""
     # ── Device ────────────────────────────────────────────────────────────────
@@ -311,25 +410,43 @@ def main(
     )
     logger.info(f"Val (real only): {len(val_ds):,} samples")
 
-    num_workers = 0  # Windows: 0 để tránh pickle issue với albumentations
+    # DataLoader: pick num_workers via the auto-policy when the caller didn't
+    # override. Albumentations 1.4.3 + module-level `_TRAIN_AUG` Compose pickle
+    # correctly under Windows spawn, so multi-worker is safe on the target
+    # hardware. Fallbacks (torchvision aug, low-core hosts, explicit override)
+    # all collapse to num_workers=0, which preserves the legacy behaviour.
+    if num_workers is None:
+        num_workers = _auto_num_workers()
+    num_workers = max(0, int(num_workers))
+
+    loader_kwargs: dict = {
+        "batch_size": batch_size,
+        "num_workers": num_workers,
+        "pin_memory": use_amp,
+        "collate_fn": collate_fn,
+    }
+    if num_workers > 0:
+        loader_kwargs["persistent_workers"] = True
+        loader_kwargs["prefetch_factor"] = 4
+
     train_loader = DataLoader(
         train_ds,
-        batch_size=batch_size,
         shuffle=True,
-        num_workers=num_workers,
-        pin_memory=use_amp,
-        collate_fn=collate_fn,
         drop_last=True,
+        **loader_kwargs,
     )
     val_loader = DataLoader(
         val_ds,
-        batch_size=batch_size,
         shuffle=False,
-        num_workers=num_workers,
-        pin_memory=use_amp,
-        collate_fn=collate_fn,
+        **loader_kwargs,
     )
     logger.info(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
+    logger.info(
+        f"DataLoader: num_workers={num_workers}, "
+        f"persistent_workers={num_workers > 0}, "
+        f"prefetch_factor={4 if num_workers > 0 else 'n/a'}, "
+        f"pin_memory={use_amp}"
+    )
 
     # ── Model ─────────────────────────────────────────────────────────────────
     model = CRNN(num_classes=NUM_CLASSES).to(device)
@@ -340,13 +457,17 @@ def main(
 
     steps_per_epoch = len(train_loader)
     total_steps = steps_per_epoch * epochs
+    # Warmup: at least WARMUP_STEPS (floor for tiny datasets) AND at least
+    # 2 full epochs of warmup so that LR doesn't ramp to peak before the
+    # network has seen enough batches (crnn-ctc-collapse-fix design §B item 2).
+    warmup_steps = max(WARMUP_STEPS, steps_per_epoch * 2)
     scheduler = build_warmup_cosine_scheduler(
         optimizer,
-        warmup_steps=min(WARMUP_STEPS, total_steps // 10),
+        warmup_steps=warmup_steps,
         total_steps=total_steps,
     )
     logger.info(
-        f"LR schedule: warmup={min(WARMUP_STEPS, total_steps // 10)} steps, "
+        f"LR schedule: warmup={warmup_steps} steps, "
         f"total={total_steps} steps ({steps_per_epoch} steps/epoch × {epochs} epochs)"
     )
 
@@ -369,53 +490,87 @@ def main(
             f"(best_val_exact_match={best_val_em:.4f} @ epoch {best_epoch})"
         )
 
+    # ── Metrics CSV (per-epoch table for plotting / spreadsheets) ────────────
+    metrics_csv_path = Path(metrics_csv) if metrics_csv else None
+    csv_file, csv_writer = _open_metrics_csv(metrics_csv_path, resume=resume)
+    if metrics_csv_path is not None:
+        logger.info(f"Metrics CSV: {metrics_csv_path}")
+
     # ── Train loop (KHÔNG early stop, chạy hết epochs) ────────────────────────
     logger.info(f"Training for {epochs} epochs (start at {start_epoch})...")
     logger.info("-" * 90)
 
-    for epoch in range(start_epoch, epochs + 1):
-        t_start = time.time()
+    try:
+        for epoch in range(start_epoch, epochs + 1):
+            t_start = time.time()
 
-        train_metrics = train_one_epoch(
-            model, train_loader, criterion, optimizer, scheduler,
-            scaler, device, epoch_idx=epoch,
-        )
-        
-        t_eval_start = time.time()
-        val_metrics = validate(model, val_loader, criterion, device)
-        eval_runtime = time.time() - t_eval_start
-        
-        eval_dict = {
-            'eval_loss': f"{val_metrics['loss']:.3f}",
-            'eval_cer': f"{val_metrics['val_cer']:.3f}",
-            'eval_exact_match': f"{val_metrics['val_exact_match']:.3f}",
-            'eval_runtime': f"{eval_runtime:.2f}",
-            'eval_samples_per_second': f"{len(val_ds) / max(eval_runtime, 1e-5):.3f}",
-            'eval_steps_per_second': f"{len(val_loader) / max(eval_runtime, 1e-5):.3f}",
-            'epoch': str(epoch)
-        }
-        print(str(eval_dict).replace('"', "'"))
-
-        # Save last (cho resume)
-        torch.save({
-            "state_dict": model.state_dict(),
-            "optimizer": optimizer.state_dict(),
-            "scheduler": scheduler.state_dict(),
-            "scaler": scaler.state_dict() if scaler is not None else None,
-            "epoch": epoch,
-            "best_val_em": best_val_em,
-            "best_epoch": best_epoch,
-        }, LAST_CHECKPOINT_PATH)
-
-        # Save best (theo val exact_match)
-        if val_metrics["val_exact_match"] > best_val_em:
-            best_val_em = val_metrics["val_exact_match"]
-            best_epoch = epoch
-            save_crnn(model, CHECKPOINT_PATH)
-            logger.info(
-                f"  → Best model saved "
-                f"(val_exact_match={best_val_em:.4f}, val_cer={val_metrics['val_cer']:.4f})"
+            train_metrics = train_one_epoch(
+                model, train_loader, criterion, optimizer, scheduler,
+                scaler, device, epoch_idx=epoch,
             )
+
+            t_eval_start = time.time()
+            val_metrics = validate(model, val_loader, criterion, device)
+            eval_runtime = time.time() - t_eval_start
+
+            eval_dict = {
+                'eval_loss': f"{val_metrics['loss']:.3f}",
+                'eval_cer': f"{val_metrics['val_cer']:.3f}",
+                'eval_exact_match': f"{val_metrics['val_exact_match']:.3f}",
+                'eval_runtime': f"{eval_runtime:.2f}",
+                'eval_samples_per_second': f"{len(val_ds) / max(eval_runtime, 1e-5):.3f}",
+                'eval_steps_per_second': f"{len(val_loader) / max(eval_runtime, 1e-5):.3f}",
+                'epoch': str(epoch)
+            }
+            print(str(eval_dict).replace('"', "'"))
+
+            # Save last (cho resume)
+            torch.save({
+                "state_dict": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+                "scaler": scaler.state_dict() if scaler is not None else None,
+                "epoch": epoch,
+                "best_val_em": best_val_em,
+                "best_epoch": best_epoch,
+            }, LAST_CHECKPOINT_PATH)
+
+            # Save best (theo val exact_match)
+            is_best = val_metrics["val_exact_match"] > best_val_em
+            if is_best:
+                best_val_em = val_metrics["val_exact_match"]
+                best_epoch = epoch
+                save_crnn(model, CHECKPOINT_PATH)
+                logger.info(
+                    f"  → Best model saved "
+                    f"(val_exact_match={best_val_em:.4f}, val_cer={val_metrics['val_cer']:.4f})"
+                )
+
+            # Append metrics row (after best-tracker so is_best is correct).
+            _append_metrics_row(
+                csv_writer, csv_file,
+                {
+                    "epoch": epoch,
+                    "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "train_loss": f"{train_metrics['loss']:.6f}",
+                    "train_grad_norm": f"{train_metrics['grad_norm']:.6f}",
+                    "learning_rate": f"{train_metrics['learning_rate']:.6e}",
+                    "eval_loss": f"{val_metrics['loss']:.6f}",
+                    "eval_cer": f"{val_metrics['val_cer']:.6f}",
+                    "eval_exact_match": f"{val_metrics['val_exact_match']:.6f}",
+                    "eval_runtime_s": f"{eval_runtime:.3f}",
+                    "gap": f"{val_metrics['loss'] - train_metrics['loss']:.6f}",
+                    "is_best": "1" if is_best else "0",
+                    "best_val_em": f"{best_val_em:.6f}",
+                    "best_epoch": best_epoch,
+                },
+            )
+    finally:
+        if csv_file is not None:
+            try:
+                csv_file.close()
+            except Exception:
+                pass
 
     logger.info("-" * 90)
     logger.info(
@@ -454,6 +609,24 @@ if __name__ == "__main__":
         "--resume", action="store_true",
         help="Resume from last checkpoint",
     )
+    parser.add_argument(
+        "--num-workers", type=int, default=None,
+        help=(
+            "DataLoader worker count. Default (None) picks an auto policy: "
+            "Windows → min(4, cpu_count//2) (or 0 if albumentations import "
+            "fails); Linux/macOS → min(8, cpu_count//2). Pass 0 to force "
+            "the legacy main-thread loader."
+        ),
+    )
+    parser.add_argument(
+        "--metrics-csv", default=None,
+        help=(
+            "Optional path to write a per-epoch metrics CSV "
+            "(epoch, train_loss, eval_loss, eval_exact_match, gap, ...). "
+            "Header is written once; rows are appended each epoch and on "
+            "--resume new rows continue the existing file."
+        ),
+    )
     args = parser.parse_args()
 
     main(
@@ -464,4 +637,6 @@ if __name__ == "__main__":
         use_real=not args.no_real,
         augment=not args.no_augment,
         resume=args.resume,
+        num_workers=args.num_workers,
+        metrics_csv=args.metrics_csv,
     )

@@ -6,15 +6,15 @@ CRNN (CNN + BiLSTM + CTC) cho Minecraft Map CAPTCHA.
 Theo research doc: CRNN+CTC là SOTA classic cho fixed-charset captcha,
 hỗ trợ ký tự chồng đè qua CTC alignment ngầm.
 
-Architecture (~2.18M params):
+Architecture (~2.18M params, count_parameters() == 2_186_553 with hidden_size=128):
     Input:    (B, 3, 64, 320) — RGB resized (1:5 aspect, kéo dãn ngang)
     CNN:      backbone 7 conv blocks, downsample H/16, W/4
-                → (B, 512, h≈4, w=80)
-    Pool:     adaptive avg pool height → (B, 512, 1, T=80) → permute
-                → (T=80, B, 512)
-    BiLSTM:   2 layers, hidden=256, dropout 0.2
-                → (T=80, B, 512)  (bidir = 2*hidden)
-    FC:       Linear(512 → 25)  (24 chars + 1 CTC blank)
+                → (B, 256, h≈4, w=80)
+    Pool:     adaptive avg pool height → (B, 256, 1, T=80) → permute
+                → (T=80, B, 256)
+    BiLSTM:   2 layers, hidden=128, dropout 0.2
+                → (T=80, B, 256)  (bidir = 2*hidden)
+    FC:       Linear(256 → 25)  (24 chars + 1 CTC blank)
     Output:   (T=80, B, 25)  — raw logits, log_softmax áp ở loss/decode
 
     T=80 → 16 timesteps/char với 5 chars cố định, dư thừa cho CTC alignment.
@@ -67,6 +67,7 @@ class ConvBlock(nn.Module):
         return self.act(self.bn(self.conv(x)))
 
 
+# Canonical params: count_parameters() == 2_186_553 with hidden_size=128. Update PIPELINE_SUMMARY.md / README.md / CLAUDE.md if you change this.
 class CRNN(nn.Module):
     """CRNN cho CAPTCHA OCR.
 
@@ -125,10 +126,10 @@ class CRNN(nn.Module):
         Returns:
             logits: (T, B, num_classes) — raw logits, log_softmax in loss.
         """
-        feat = self.cnn(x)               # (B, 512, h, w)
-        feat = self.height_pool(feat)    # (B, 512, 1, w)
-        feat = feat.squeeze(2)           # (B, 512, w)
-        feat = feat.permute(2, 0, 1)     # (w, B, 512) — T=w
+        feat = self.cnn(x)               # (B, 256, h, w)
+        feat = self.height_pool(feat)    # (B, 256, 1, w)
+        feat = feat.squeeze(2)           # (B, 256, w)
+        feat = feat.permute(2, 0, 1)     # (w, B, 256) — T=w
 
         rnn_out, _ = self.rnn(feat)      # (T, B, 2*hidden)
         logits = self.fc(rnn_out)        # (T, B, num_classes)

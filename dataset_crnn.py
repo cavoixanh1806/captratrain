@@ -59,32 +59,36 @@ def _build_albu_aug(strong: bool = True) -> "A.Compose | None":
     if not _HAS_ALBU:
         return None
     if strong:
+        # Toned-down "strong" pipeline (crnn-ctc-collapse-fix §A): augmentation
+        # is now mild enough that the train distribution does not drift away
+        # from the clean val distribution, while still providing enough
+        # variation for a 641-image corpus. See design.md for rationale.
         return A.Compose([
             A.Affine(
-                rotate=(-12, 12),
-                translate_percent=(-0.06, 0.06),
-                scale=(0.85, 1.15),
-                shear=(-5, 5),
-                p=0.6,
+                rotate=(-4, 4),
+                translate_percent=(-0.03, 0.03),
+                scale=(0.92, 1.08),
+                shear=(-2, 2),
+                p=0.5,
                 mode=cv2.BORDER_REFLECT_101,
             ),
-            A.Perspective(scale=(0.02, 0.08), p=0.3),
+            A.Perspective(scale=(0.01, 0.04), p=0.2),
             A.RandomBrightnessContrast(
-                brightness_limit=0.2, contrast_limit=0.2, p=0.5,
+                brightness_limit=0.15, contrast_limit=0.15, p=0.5,
             ),
             A.HueSaturationValue(
-                hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=15,
+                hue_shift_limit=5, sat_shift_limit=12, val_shift_limit=10,
                 p=0.4,
             ),
-            A.GaussNoise(var_limit=(5.0, 25.0), p=0.4),
+            A.GaussNoise(var_limit=(3.0, 12.0), p=0.3),
             A.OneOf([
                 A.GaussianBlur(blur_limit=(3, 5)),
                 A.MotionBlur(blur_limit=3),
-            ], p=0.25),
+            ], p=0.15),
             A.CoarseDropout(
-                max_holes=4, max_height=8, max_width=8,
+                max_holes=2, max_height=5, max_width=5,
                 min_holes=1, min_height=4, min_width=4,
-                fill_value=0, p=0.2,
+                fill_value=0, p=0.1,
             ),
         ])
     else:
@@ -98,11 +102,18 @@ def _build_albu_aug(strong: bool = True) -> "A.Compose | None":
 
 _TRAIN_AUG = _build_albu_aug(strong=True) if _HAS_ALBU else None
 
-# Torchvision fallback nếu không có albumentations
+# Torchvision fallback nếu không có albumentations.
+# Mirrors the toned-down albumentations intensities (crnn-ctc-collapse-fix §A):
+# rotate ±4, translate 0.03, scale (0.92, 1.08), shear 2,
+# brightness/contrast/saturation 0.15, hue 0.04.
 _TV_TRAIN_AUG = transforms.Compose([
-    transforms.RandomAffine(degrees=12, translate=(0.06, 0.06), scale=(0.85, 1.15), shear=5),
-    transforms.RandomPerspective(distortion_scale=0.2, p=0.3),
-    transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.08),
+    transforms.RandomAffine(
+        degrees=4, translate=(0.03, 0.03), scale=(0.92, 1.08), shear=2,
+    ),
+    transforms.RandomPerspective(distortion_scale=0.1, p=0.2),
+    transforms.ColorJitter(
+        brightness=0.15, contrast=0.15, saturation=0.15, hue=0.04,
+    ),
 ])
 
 
