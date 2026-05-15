@@ -145,7 +145,7 @@ class CaptchaSolver:
             generated_ids = self.model.generate(
                 pixel_values,
                 max_length=12,
-                min_length=5,
+                min_length=7,
                 num_beams=8,
                 length_penalty=2.0,
                 early_stopping=True,
@@ -222,7 +222,7 @@ class CaptchaSolver:
             generated_ids = self.model.generate(
                 pixel_values,
                 max_length=12,
-                min_length=5,
+                min_length=7,
                 num_beams=8,
                 length_penalty=2.0,
                 early_stopping=True,

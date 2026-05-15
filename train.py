@@ -70,7 +70,7 @@ REAL_DATA_DIR: str = "data"
 # 500 * 0.8 = 400 train, batch=16 → 25 steps/epoch, 50 epochs → 1250 total steps
 BATCH_SIZE: int = 16
 LEARNING_RATE: float = 5e-5
-NUM_EPOCHS: int = 30
+NUM_EPOCHS: int = 50
 SAVE_STEPS: int = 150        # Save moi ~3 epochs (604/16=38 steps/epoch)
 EVAL_STEPS: int = 150        # Eval moi ~3 epochs — giam tu 100 de tiet kiem thoi gian
 MAX_TARGET_LENGTH: int = 12
@@ -185,7 +185,7 @@ def setup_model(processor: TrOCRProcessor) -> VisionEncoderDecoderModel:
         eos_token_id=tokenizer.sep_token_id,
         pad_token_id=tokenizer.pad_token_id,
         # Bat min_length de model bat buoc sinh du tokens
-        min_length=5,                # [BOS] + 5 chars toi thieu
+        min_length=7,                # BOS + 5 chars + EOS = 7 tokens toi thieu
     )
 
     logger.info("✅ Model đã được cấu hình thành công.")
