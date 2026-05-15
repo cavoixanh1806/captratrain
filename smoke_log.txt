@@ -1,0 +1,17 @@
+============================================================ 
+CRNN+CTC SMOKE TEST (5 epochs, batch 16) 
+Started: 05/15/2026 15:34:04.72 
+Python:  venv\Scripts\python.exe 
+============================================================ 
+[INFO] Co 754 anh real trong data/ 
+2026-05-15 15:34:09,889 [INFO] Device: cpu
+2026-05-15 15:34:09,912 [INFO] Train: 641 samples (synthetic=off)
+2026-05-15 15:34:09,913 [INFO] Val (real only): 113 samples
+2026-05-15 15:34:09,913 [INFO] Train batches: 40, Val batches: 8
+2026-05-15 15:34:09,990 [INFO] CRNN params: 8,718,937
+2026-05-15 15:34:09,990 [INFO] LR schedule: warmup=20 steps, total=200 steps (40 steps/epoch × 5 epochs)
+2026-05-15 15:34:09,990 [INFO] Training for 5 epochs (start at 1)...
+2026-05-15 15:34:09,990 [INFO] ------------------------------------------------------------------------------------------
+2026-05-15 15:36:48,012 [INFO] Epoch   1/5 (158s) lr=9.70e-04 | train: loss=11.7546 em~=0.000 cer~=4.250 | val: loss=3.5588 em=0.0000 cer=1.0000
+2026-05-15 15:39:24,546 [INFO] Epoch   2/5 (156s) lr=7.52e-04 | train: loss=3.5436 em~=0.000 cer~=1.000 | val: loss=3.5422 em=0.0000 cer=1.0000
+2026-05-15 15:42:06,575 [INFO] Epoch   3/5 (162s) lr=4.19e-04 | train: loss=3.5334 em~=0.000 cer~=1.000 | val: loss=3.5384 em=0.0000 cer=1.0000

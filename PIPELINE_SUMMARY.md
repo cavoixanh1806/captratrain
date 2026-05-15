@@ -58,10 +58,10 @@ CAPTCHA 128×128 RGB
 
 ## 📊 Logging
 
-Cả 2 script `.bat` dùng PowerShell `Tee-Object`:
+Cả 2 script `.bat` sử dụng script Python inline (`sys.stdout.write` + `f.write`) để khắc phục triệt để lỗi mã hóa (binary/UTF-16 LE mixed ASCII) thường gặp của PowerShell `Tee-Object` trên Windows:
 
-- ✅ **Vừa hiện ra CMD** (real-time, thấy progress)
-- ✅ **Vừa ghi file log**
+- ✅ **Vừa hiện ra CMD** (với thanh tiến trình `tqdm` kiểu Hugging Face Trainer)
+- ✅ **Vừa ghi file log** (đảm bảo chuẩn `UTF-8` thuần túy, mở được trên mọi text editor)
   - `run_smoke.bat` → `smoke_log.txt`
   - `run_all.bat` → `train_log.txt`
 

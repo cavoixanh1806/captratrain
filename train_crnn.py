@@ -149,6 +149,7 @@ def train_one_epoch(
     scheduler: torch.optim.lr_scheduler.LambdaLR,
     scaler: "torch.cuda.amp.GradScaler | None",
     device: torch.device,
+    epoch_idx: int,
     log_interval: int = 50,
 ) -> dict[str, float]:
     """Train 1 epoch."""
@@ -158,7 +159,9 @@ def train_one_epoch(
     all_preds: list[str] = []
     all_labels: list[str] = []
 
-    for step, batch in enumerate(loader):
+    from tqdm import tqdm
+    pbar = tqdm(loader, leave=False, dynamic_ncols=True)
+    for step, batch in enumerate(pbar):
         images = batch["images"].to(device, non_blocking=True)
         labels = batch["labels"].to(device, non_blocking=True)
         label_lengths = batch["label_lengths"].to(device, non_blocking=True)
@@ -180,7 +183,7 @@ def train_one_epoch(
                 )
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP_NORM)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP_NORM)
             scaler.step(optimizer)
             scaler.update()
         else:
@@ -193,7 +196,7 @@ def train_one_epoch(
             )
             loss = criterion(log_probs, labels, input_lengths, label_lengths)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP_NORM)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP_NORM)
             optimizer.step()
 
         # Step scheduler MỖI BATCH (warmup + cosine theo batch step)
@@ -201,6 +204,18 @@ def train_one_epoch(
 
         total_loss += loss.item()
         n_batches += 1
+        
+        if step > 0 and step % log_interval == 0:
+            lr_now = optimizer.param_groups[0]['lr']
+            current_epoch = epoch_idx - 1 + (step / len(loader))
+            gn = grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm
+            log_dict = {
+                'loss': f"{loss.item():.4f}",
+                'grad_norm': f"{gn:.3f}",
+                'learning_rate': f"{lr_now:.3e}",
+                'epoch': f"{current_epoch:.2f}"
+            }
+            tqdm.write(str(log_dict).replace('"', "'"))
 
         # Decode every N steps để khỏi chậm — chỉ sample
         if step % log_interval == 0:
@@ -231,7 +246,8 @@ def validate(
     all_preds: list[str] = []
     all_labels: list[str] = []
 
-    for batch in loader:
+    from tqdm import tqdm
+    for batch in tqdm(loader, leave=False, dynamic_ncols=True):
         images = batch["images"].to(device, non_blocking=True)
         labels = batch["labels"].to(device, non_blocking=True)
         label_lengths = batch["label_lengths"].to(device, non_blocking=True)
@@ -362,22 +378,23 @@ def main(
 
         train_metrics = train_one_epoch(
             model, train_loader, criterion, optimizer, scheduler,
-            scaler, device,
+            scaler, device, epoch_idx=epoch,
         )
+        
+        t_eval_start = time.time()
         val_metrics = validate(model, val_loader, criterion, device)
-
-        elapsed = time.time() - t_start
-        lr_now = optimizer.param_groups[0]["lr"]
-
-        logger.info(
-            f"Epoch {epoch:3d}/{epochs} ({elapsed:.0f}s) lr={lr_now:.2e} | "
-            f"train: loss={train_metrics['loss']:.4f} "
-            f"em~={train_metrics['train_exact_match']:.3f} "
-            f"cer~={train_metrics['train_cer']:.3f} | "
-            f"val: loss={val_metrics['loss']:.4f} "
-            f"em={val_metrics['val_exact_match']:.4f} "
-            f"cer={val_metrics['val_cer']:.4f}"
-        )
+        eval_runtime = time.time() - t_eval_start
+        
+        eval_dict = {
+            'eval_loss': f"{val_metrics['loss']:.3f}",
+            'eval_cer': f"{val_metrics['val_cer']:.3f}",
+            'eval_exact_match': f"{val_metrics['val_exact_match']:.3f}",
+            'eval_runtime': f"{eval_runtime:.2f}",
+            'eval_samples_per_second': f"{len(val_ds) / max(eval_runtime, 1e-5):.3f}",
+            'eval_steps_per_second': f"{len(val_loader) / max(eval_runtime, 1e-5):.3f}",
+            'epoch': str(epoch)
+        }
+        print(str(eval_dict).replace('"', "'"))
 
         # Save last (cho resume)
         torch.save({

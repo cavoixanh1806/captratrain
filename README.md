@@ -200,17 +200,18 @@ Background sinh giống real CAPTCHA (phân tích từ 754 ảnh thật):
 
 ## Đọc output khi train
 
+Output đã được format lại giống y hệt chuẩn của **Hugging Face Trainer**, với thanh tiến trình `tqdm` và log dưới dạng Dictionary:
+
 ```
-Epoch  5/40 (38s) lr=8.04e-04 | train: loss=0.7134 em~=0.625 cer~=0.180 |
-                                  val: loss=0.4521 em=0.7234 cer=0.0892
-  → Best model saved (val_exact_match=0.7234, val_cer=0.0892)
+ 20%|█████████▏                                    | 10/50 [00:15<00:45,  1.50s/it]
+{'loss': '0.2998', 'grad_norm': '14.620', 'learning_rate': '4.465e-05', 'epoch': '9.50'}
+{'eval_loss': '1.799', 'eval_cer': '0.348', 'eval_exact_match': '0.130', 'eval_runtime': '42.19', 'eval_samples_per_second': '2.37', 'eval_steps_per_second': '0.166', 'epoch': '9'}
 ```
 
-- `loss`: CTC loss (càng thấp càng tốt)
-- `em`: exact_match (% ảnh đoán đúng 5/5 chars)
-- `cer`: character error rate (càng thấp càng tốt)
-- Train metrics có `~` vì chỉ tính trên sample
-- Val metrics tính trên toàn val set
+- `loss` / `eval_loss`: CTC loss (càng thấp càng tốt)
+- `eval_exact_match`: Tỷ lệ % ảnh đoán đúng hoàn toàn 5/5 ký tự
+- `eval_cer`: Character error rate (tỷ lệ lỗi từng ký tự, càng thấp càng tốt)
+- Thanh tiến trình sẽ tự động ghi đè trên CMD (`\r`) để không làm trôi dòng, giúp bạn theo dõi quá trình mượt mà.
 
 ### Eval verdict
 

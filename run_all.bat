@@ -44,7 +44,7 @@ echo.
 REM === Buoc 0: Import data moi tu dataset/ ===
 if exist dataset (
     echo BUOC 0/2: Import data moi tu dataset/
-    powershell -Command "%PY% import_new_data.py 2>&1 | Tee-Object -FilePath %LOGFILE% -Append"
+    %PY% import_new_data.py 2>&1 | %PY% -c "import sys; f=open('%LOGFILE%', 'a', encoding='utf-8'); [(sys.stdout.write(l), f.write(l), f.flush()) for l in sys.stdin]"
     if errorlevel 1 goto error
     echo [OK] Import xong.
     echo.
@@ -72,7 +72,7 @@ echo.
 echo ============================================================
 echo BUOC 1/2: Train CRNN+CTC (50 epochs, %IMG_COUNT% real, augment ON)
 echo ============================================================
-powershell -Command "%PY% train_crnn.py 2>&1 | Tee-Object -FilePath %LOGFILE% -Append"
+%PY% train_crnn.py 2>&1 | %PY% -c "import sys; f=open('%LOGFILE%', 'a', encoding='utf-8'); [(sys.stdout.write(l), f.write(l), f.flush()) for l in sys.stdin]"
 if errorlevel 1 goto error
 echo [OK] Buoc 1 hoan tat. Model: captcha_crnn_model.pth (+ .onnx)
 
@@ -80,7 +80,7 @@ echo.
 echo ============================================================
 echo BUOC 2/2: Eval tren %IMG_COUNT% anh real
 echo ============================================================
-powershell -Command "%PY% eval_crnn.py 2>&1 | Tee-Object -FilePath %LOGFILE% -Append"
+%PY% eval_crnn.py 2>&1 | %PY% -c "import sys; f=open('%LOGFILE%', 'a', encoding='utf-8'); [(sys.stdout.write(l), f.write(l), f.flush()) for l in sys.stdin]"
 if errorlevel 1 goto error
 echo [OK] Buoc 2 hoan tat.
 

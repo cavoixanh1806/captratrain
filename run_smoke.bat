@@ -56,7 +56,7 @@ if exist captcha_crnn_last.pth del /q captcha_crnn_last.pth
 echo ============================================================
 echo BUOC 1/2: Train smoke (5 epochs, batch 16, no augment)
 echo ============================================================
-powershell -Command "%PY% train_crnn.py --epochs 5 --batch-size 16 --no-augment 2>&1 | Tee-Object -FilePath %LOGFILE% -Append"
+%PY% train_crnn.py --epochs 5 --batch-size 16 --no-augment 2>&1 | %PY% -c "import sys; f=open('%LOGFILE%', 'a', encoding='utf-8'); [(sys.stdout.write(l), f.write(l), f.flush()) for l in sys.stdin]"
 if errorlevel 1 goto error
 echo [OK] Train smoke hoan tat.
 
@@ -64,7 +64,7 @@ echo.
 echo ============================================================
 echo BUOC 2/2: Eval smoke (truoc tien gioi xem so so the nao)
 echo ============================================================
-powershell -Command "%PY% eval_crnn.py --batch-size 16 2>&1 | Tee-Object -FilePath %LOGFILE% -Append"
+%PY% eval_crnn.py --batch-size 16 2>&1 | %PY% -c "import sys; f=open('%LOGFILE%', 'a', encoding='utf-8'); [(sys.stdout.write(l), f.write(l), f.flush()) for l in sys.stdin]"
 if errorlevel 1 goto error
 
 echo.
