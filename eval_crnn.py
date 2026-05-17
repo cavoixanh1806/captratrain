@@ -56,6 +56,35 @@ def evaluate(
         logger.error(f"Metadata not found: {metadata_path}")
         return {}
 
+    # Fallback: nếu best checkpoint không tồn tại (ví dụ best_val_em == 0
+    # suốt training), thử dùng `captcha_crnn_last.pth` để eval cho biết
+    # tình trạng cuối cùng. KHÔNG crash workflow chỉ vì không có best.
+    ckpt_path = Path(checkpoint)
+    if not ckpt_path.exists():
+        last_path = Path("captcha_crnn_last.pth")
+        if last_path.exists():
+            logger.warning(
+                f"Best checkpoint missing: {ckpt_path}. "
+                f"Falling back to last checkpoint: {last_path}"
+            )
+            # `last.pth` lưu thẳng bằng torch.save({"state_dict": ..., ...})
+            # ở train_crnn.main, không qua save_crnn → cần wrap trước khi
+            # load_crnn (load_crnn expect payload có key "num_classes").
+            import torch as _torch
+            from crnn_model import CRNN as _CRNN, NUM_CLASSES as _NUM_CLASSES, save_crnn as _save_crnn
+            raw = _torch.load(str(last_path), map_location="cpu", weights_only=False)
+            tmp_model = _CRNN(num_classes=_NUM_CLASSES)
+            tmp_model.load_state_dict(raw["state_dict"])
+            fallback_ckpt = str(metadata_path.parent / "_eval_fallback.pth")
+            _save_crnn(tmp_model, fallback_ckpt)
+            checkpoint = fallback_ckpt
+        else:
+            logger.error(
+                f"No checkpoint available. Tried {ckpt_path} and {last_path}. "
+                f"Run `python train_crnn.py` first."
+            )
+            return {}
+
     df = pd.read_csv(metadata_path, dtype=str).dropna()
     df["text"] = df["text"].str.strip().str.upper()
     df = df[df["text"].str.len() == 5].reset_index(drop=True)

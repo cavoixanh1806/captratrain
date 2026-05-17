@@ -19,11 +19,12 @@ CAPTCHA 128×128 RGB
            ▼
   ┌────────────────────────────────────────────────────────┐
   │ CRNN backbone                                          │
-  │   CNN 7 blocks → (B, 256, h≈4, w=80)                    │
-  │   AdaptivePool + reshape → (T=80, B, 256)               │
-  │   BiLSTM 2 layers, hidden=128 → (T=80, B, 256)          │
-  │   Linear → (T=80, B, NUM_CLASSES=25)                    │
-  │   Canonical: count_parameters() == 2_186_553            │
+  │   CNN 7 blocks (64→128→256→256→512→512→512)             │
+  │     → (B, 512, h≈3, w=79)                                │
+  │   AdaptivePool + reshape → (T=79, B, 512)                │
+  │   BiLSTM 2 layers, hidden=256 → (T=79, B, 512)           │
+  │   Linear → (T=79, B, NUM_CLASSES=25)                     │
+  │   Canonical: count_parameters() == 8_718_937             │
   └────────┬───────────────────────────────────────────────┘
            ▼
   ┌────────────────┐
@@ -274,14 +275,14 @@ logits = session.run(None, {"input": img.astype(np.float32)})[0]
 
 | Tham số | Giá trị | Nơi định nghĩa |
 |---|---|---|
-| Backbone | CNN 7 blocks + BiLSTM 2-layer (hidden=128) | `crnn_model.CRNN.__init__` |
-| Params | 2,186,553 | `CRNN().count_parameters()` |
+| Backbone | CNN 7 blocks (64→128→256→256→512→512→512) + BiLSTM 2-layer (hidden=256) | `crnn_model.CRNN.__init__` |
+| Params | 8,718,937 (~8.72M) | `CRNN().count_parameters()` |
 | Loss | CTCLoss (blank=0, zero_infinity=True) | `train_crnn.main` |
 | Optimizer | AdamW (weight_decay=1e-4) | `train_crnn.main` |
-| Default LR | 5e-4 | `train_crnn.DEFAULT_LR` |
+| Default LR | 3e-4 | `train_crnn.DEFAULT_LR` |
 | LR schedule | Linear warmup ≥ 2 epochs (`max(WARMUP_STEPS, steps_per_epoch * 2)`) → cosine decay → `lr × 0.01` | `train_crnn.build_warmup_cosine_scheduler` |
 | Default epochs | 200 | `train_crnn.DEFAULT_EPOCHS` |
-| Default batch | 32 | `train_crnn.DEFAULT_BATCH_SIZE` |
+| Default batch | 64 (RTX 3060 8GB OK) | `train_crnn.DEFAULT_BATCH_SIZE` |
 | Input size | 64×320 (resize từ 128×128, ratio 1:5) | `crnn_model.INPUT_HEIGHT/WIDTH` |
 | Augment | Albumentations toned-down: Affine ±4°, Perspective 0.01–0.04, ColorJitter mild, GaussNoise 3–12, OneOf(GaussianBlur/MotionBlur), CoarseDropout 2 holes 5×5 | `dataset_crnn._build_albu_aug(strong=True)` |
 | Mixed precision | FP16 (CUDA only) | `train_crnn.main` |

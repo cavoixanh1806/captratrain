@@ -68,8 +68,8 @@ ONNX_PATH: str = "captcha_crnn_model.onnx"
 LAST_CHECKPOINT_PATH: str = "captcha_crnn_last.pth"
 
 DEFAULT_EPOCHS: int = 200
-DEFAULT_BATCH_SIZE: int = 32
-DEFAULT_LR: float = 5e-4
+DEFAULT_BATCH_SIZE: int = 64
+DEFAULT_LR: float = 3e-4
 WARMUP_STEPS: int = 200
 GRAD_CLIP_NORM: float = 5.0
 
@@ -535,8 +535,13 @@ def main(
                 "best_epoch": best_epoch,
             }, LAST_CHECKPOINT_PATH)
 
-            # Save best (theo val exact_match)
-            is_best = val_metrics["val_exact_match"] > best_val_em
+            # Save best (theo val exact_match). LUÔN save ở epoch 1 để có
+            # checkpoint baseline (tránh case `best_val_em == 0` suốt training
+            # khiến file best.pth không bao giờ được tạo và eval crash).
+            is_best = (
+                val_metrics["val_exact_match"] > best_val_em
+                or epoch == start_epoch
+            )
             if is_best:
                 best_val_em = val_metrics["val_exact_match"]
                 best_epoch = epoch
