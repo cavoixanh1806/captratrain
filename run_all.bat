@@ -139,9 +139,19 @@ echo.
 echo ============================================================
 echo BUOC 2/3: Eval tren %IMG_COUNT% anh real
 echo ============================================================
-%PY% eval_crnn.py --json-out "%RUN_DIR%\eval_summary.json" 2>&1 | %PY% -c "import sys; f=open(r'%LOGFILE%', 'a', encoding='utf-8'); [(sys.stdout.write(l), f.write(l), f.flush()) for l in sys.stdin]"
+echo.
+echo --- VAL split (75 anh, do generalization that) ---
+%PY% eval_crnn.py --split val --json-out "%RUN_DIR%\eval_val.json" 2>&1 | %PY% -c "import sys; f=open(r'%LOGFILE%', 'a', encoding='utf-8'); [(sys.stdout.write(l), f.write(l), f.flush()) for l in sys.stdin]"
 if errorlevel 1 goto error
-echo [OK] Buoc 2 hoan tat. Eval JSON: %RUN_DIR%\eval_summary.json
+echo.
+echo --- TRAIN split (425 anh, do memorization) ---
+%PY% eval_crnn.py --split train --json-out "%RUN_DIR%\eval_train.json" 2>&1 | %PY% -c "import sys; f=open(r'%LOGFILE%', 'a', encoding='utf-8'); [(sys.stdout.write(l), f.write(l), f.flush()) for l in sys.stdin]"
+if errorlevel 1 goto error
+echo.
+echo --- ALL split (500 anh, tham khao) ---
+%PY% eval_crnn.py --split all --json-out "%RUN_DIR%\eval_summary.json" 2>&1 | %PY% -c "import sys; f=open(r'%LOGFILE%', 'a', encoding='utf-8'); [(sys.stdout.write(l), f.write(l), f.flush()) for l in sys.stdin]"
+if errorlevel 1 goto error
+echo [OK] Buoc 2 hoan tat. Eval JSON: %RUN_DIR%\eval_val.json + eval_train.json + eval_summary.json
 
 echo.
 echo ============================================================
@@ -167,7 +177,9 @@ echo Best model:   captcha_crnn_model.pth  (root + run dir)
 echo Last (resume): captcha_crnn_last.pth  (root + run dir)
 echo ONNX:         captcha_crnn_model.onnx (root + run dir)
 echo Metrics CSV:  %RUN_DIR%\metrics.csv
-echo Eval JSON:    %RUN_DIR%\eval_summary.json
+echo Eval JSON:    %RUN_DIR%\eval_val.json (val 75 anh, generalization)
+echo               %RUN_DIR%\eval_train.json (train 425 anh, memorization)
+echo               %RUN_DIR%\eval_summary.json (all 500 anh, tong hop)
 echo Log:          %LOGFILE%
 echo.
 echo Resume tiep theo: run_all.bat --resume --epochs 50

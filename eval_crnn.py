@@ -41,8 +41,20 @@ def evaluate(
     image_dir: str = "data",
     batch_size: int = 64,
     json_out: "str | Path | None" = None,
+    split: str = "all",
+    seed: int = 42,
+    val_split: float = 0.15,
 ) -> dict:
     """Run evaluation.
+
+    Args:
+        split: "all" (default, đánh giá toàn bộ metadata), "val" (chỉ val
+            split — đo generalization thực, dùng cùng seed/val_split với
+            ``dataset_crnn.create_crnn_datasets``), hoặc "train" (chỉ
+            train split — đo memorization).
+        seed: Phải khớp với seed dùng khi train (default 42 trong
+            ``dataset_crnn.create_crnn_datasets``).
+        val_split: Phải khớp với val_split dùng khi train (default 0.15).
 
     Returns:
         Dict tóm tắt metrics. When ``json_out`` is provided, the same dict
@@ -88,6 +100,24 @@ def evaluate(
     df = pd.read_csv(metadata_path, dtype=str).dropna()
     df["text"] = df["text"].str.strip().str.upper()
     df = df[df["text"].str.len() == 5].reset_index(drop=True)
+
+    # Apply same train/val split as dataset_crnn.create_crnn_datasets so we
+    # can evaluate generalization on unseen images.
+    split = (split or "all").lower()
+    if split not in {"all", "val", "train"}:
+        raise ValueError(f"split must be one of all/val/train, got {split!r}")
+    if split != "all":
+        # Mirror dataset_crnn.create_crnn_datasets logic exactly: same seed,
+        # same val_split, val drawn from the END of the shuffled frame.
+        df_shuf = df.sample(frac=1.0, random_state=seed).reset_index(drop=True)
+        n_val = int(round(len(df_shuf) * val_split))
+        df_train = df_shuf.iloc[:-n_val] if n_val > 0 else df_shuf
+        df_val = df_shuf.iloc[-n_val:] if n_val > 0 else df_shuf.iloc[0:0]
+        df = (df_val if split == "val" else df_train).reset_index(drop=True)
+        logger.info(
+            f"Split filter: {split} → {len(df)} samples "
+            f"(seed={seed}, val_split={val_split})"
+        )
 
     logger.info(f"Total samples: {len(df)}")
     logger.info(f"Checkpoint: {checkpoint}")
@@ -150,7 +180,8 @@ def evaluate(
     print()
     print("Per-position accuracy:")
     for i, acc in enumerate(pos_acc):
-        bar = "█" * int(acc * 30)
+        # ASCII-safe bar: '#' instead of '█' to avoid Windows cp1252 crash
+        bar = "#" * int(acc * 30)
         print(f"  Position {i + 1}: {acc * 100:6.2f}%  {bar}")
     print()
     if confusions:
@@ -232,6 +263,16 @@ def main() -> None:
     parser.add_argument("--image-dir", default="data")
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument(
+        "--split", default="all", choices=["all", "val", "train"],
+        help=(
+            "Tap con de eval. 'all' = toan bo metadata, 'val' = 15%% giu "
+            "lai khi train (do generalization that), 'train' = phan da hoc "
+            "(do memorization). Mac dinh 'all' de tuong thich."
+        ),
+    )
+    parser.add_argument("--seed", type=int, default=42, help="Seed dung khi split (phai khop training).")
+    parser.add_argument("--val-split", type=float, default=0.15, help="Ti le val (phai khop training).")
+    parser.add_argument(
         "--json-out", default=None,
         help=(
             "Optional path to dump the full evaluation summary as JSON "
@@ -246,6 +287,9 @@ def main() -> None:
         image_dir=args.image_dir,
         batch_size=args.batch_size,
         json_out=args.json_out,
+        split=args.split,
+        seed=args.seed,
+        val_split=args.val_split,
     )
 
 
